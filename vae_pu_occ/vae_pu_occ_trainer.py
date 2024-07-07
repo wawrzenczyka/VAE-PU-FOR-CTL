@@ -625,43 +625,46 @@ class VaePuOccTrainer(VaePuTrainer):
         )
 
     def _save_vae_pu_occ_metrics(self, occ_method, occ_metrics, best_epoch):
-        os.makedirs(
-            os.path.join(self.config["directory"], "occ", occ_method), exist_ok=True
-        )
-        acc, precision, recall, f1_score, auc, b_acc = self.model.accuracy(
-            self.DL_test,
-            balanced_cutoff=self.balanced_cutoff,
-            pi_p=self.config["pi_p"],
-        )
-        occ_acc, occ_auc, occ_precision, occ_recall, occ_f1, occ_fdr = occ_metrics
-        metric_values = {
-            "Method": f"{self.model_type}+{occ_method}",
-            "OCC accuracy": occ_acc,
-            "OCC precision": occ_precision,
-            "OCC recall": occ_recall,
-            "OCC F1 score": occ_f1,
-            "OCC AUC": occ_auc,
-            "Accuracy": acc,
-            "Precision": precision,
-            "Recall": recall,
-            "AUC": auc,
-            "Balanced accuracy": b_acc,
-            "F1 score": f1_score,
-            "Best epoch": best_epoch + 1,
-        }
-        if self.baseline_training_time is not None:
-            metric_values["Time"] = self.baseline_training_time + self.occ_training_time
+        for label_shift_pi in self.config['label_shift_pis']:
+            os.makedirs(
+                os.path.join(self.config["directory"], "occ", occ_method), exist_ok=True
+            )
+            acc, precision, recall, f1_score, auc, b_acc = self.model.accuracy(
+                # self.DL_test,
+                self._get_label_shifted_test_DL(label_shift_pi),
+                balanced_cutoff=self.balanced_cutoff,
+                pi_p=self.config["pi_p"],
+            )
+            occ_acc, occ_auc, occ_precision, occ_recall, occ_f1, occ_fdr = occ_metrics
+            metric_values = {
+                "Method": f"{self.model_type}+{occ_method}",
+                "Label shift pi": label_shift_pi,
+                "OCC accuracy": occ_acc,
+                "OCC precision": occ_precision,
+                "OCC recall": occ_recall,
+                "OCC F1 score": occ_f1,
+                "OCC AUC": occ_auc,
+                "Accuracy": acc,
+                "Precision": precision,
+                "Recall": recall,
+                "AUC": auc,
+                "Balanced accuracy": b_acc,
+                "F1 score": f1_score,
+                "Best epoch": best_epoch + 1,
+            }
+            if self.baseline_training_time is not None:
+                metric_values["Time"] = self.baseline_training_time + self.occ_training_time
 
-        with open(
-            os.path.join(
-                self.config["directory"],
-                "occ",
-                occ_method,
-                f"metric_values_{self.model_type}+{occ_method}.json",
-            ),
-            "w",
-        ) as f:
-            json.dump(metric_values, f)
+            with open(
+                os.path.join(
+                    self.config["directory"],
+                    "occ",
+                    occ_method,
+                    f"metric_values_{self.model_type}+{occ_method}-ls-{label_shift_pi:.2f}.json",
+                ),
+                "w",
+            ) as f:
+                json.dump(metric_values, f)
         return self.model
 
     def _save_results(self):

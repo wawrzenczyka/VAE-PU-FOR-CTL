@@ -352,6 +352,70 @@ def split_datasets(X, y, o, label_frequency, val_size, test_size, case_control=F
     return train, val, test, label_frequency, pi_p, n_input
 
 
+def get_label_shifted_datasets(dataset_data, label_shift_pi=None):
+    if label_shift_pi is None:
+        return dataset_data
+    
+    # pi = P / P + N
+
+    # pi P + pi N = P
+    # N = P (1 - pi) / pi
+    # P = N pi / (1 - pi)
+    
+    (
+        train_samples,
+        val_samples,
+        test_samples,
+        label_frequency,
+        pi_p,
+        n_input,
+    ) = dataset_data
+
+    def process(samples):
+        X, y, o = samples
+        X_pos, y_pos, o_pos = X[y == 1], y[y == 1], o[y == 1]
+        X_neg, y_neg, o_neg = X[y != 1], y[y != 1], o[y != 1]
+
+        pi = torch.sum(y == 1) / len(y)
+        if pi < label_shift_pi:
+            n_pos = torch.sum(y == 1)
+            n_neg = int(n_pos * (1 - pi) / pi)
+
+            sampled_neg_idx = torch.ones(len(y_pos)).multinomial(num_samples=n_neg, replacement=True)
+            
+            X, y, o = torch.concat([
+                X_pos, X_neg[sampled_neg_idx]
+            ]), torch.concat([
+                y_pos, y_neg[sampled_neg_idx]
+            ]), torch.concat([
+                o_pos, o_neg[sampled_neg_idx]
+            ])
+        elif pi > label_shift_pi:
+            n_neg = torch.sum(y != 1)
+            n_pos = int(n_neg * pi / (1 - pi))
+
+            sampled_pos_idx = torch.ones(len(y_pos)).multinomial(num_samples=n_pos, replacement=True)
+            
+            X, y, o = torch.concat([
+                X_neg, X_pos[sampled_pos_idx]
+            ]), torch.concat([
+                y_neg, y_pos[sampled_pos_idx]
+            ]), torch.concat([
+                o_neg, o_pos[sampled_pos_idx]
+            ])
+
+        val_samples = process(val_samples)
+        test_samples = process(test_samples)
+    
+    return (
+        train_samples,
+        val_samples,
+        test_samples,
+        label_frequency,
+        pi_p,
+        n_input,
+    )
+
 def get_dataset(
     name,
     device,
@@ -362,6 +426,7 @@ def get_dataset(
     case_control=False,
     use_scar_labeling=False,
     synthetic_labels=False,
+    label_shift_pi=None,
 ):
     if "MNIST" in name:
         if "3v5" in name:
@@ -378,7 +443,7 @@ def get_dataset(
         else:
             raise Exception("Dataset not supported")
 
-        return __get_pu_mnist(
+        dataset_data = __get_pu_mnist(
             included_classes=included_classes,
             positive_classes=positive_classes,
             case_control=case_control,
@@ -402,7 +467,7 @@ def get_dataset(
         else:
             raise Exception("Dataset not supported")
 
-        return __get_pu_cifar10_precomputed(
+        dataset_data = __get_pu_cifar10_precomputed(
             included_classes=included_classes,
             positive_classes=positive_classes,
             case_control=case_control,
@@ -426,7 +491,7 @@ def get_dataset(
         else:
             raise Exception("Dataset not supported")
 
-        return __get_pu_stl_precomputed(
+        dataset_data = __get_pu_stl_precomputed(
             included_classes=included_classes,
             positive_classes=positive_classes,
             case_control=case_control,
@@ -506,11 +571,11 @@ def get_dataset(
         X = torch.from_numpy(X)
         y = torch.from_numpy(y)
         o = torch.from_numpy(o)
-        return split_datasets(
+        dataset_data = split_datasets(
             X, y, o, label_frequency, val_size, test_size, case_control=case_control
         )
     elif name in DATASET_NAMES:
-        return get_small_dataset(
+        dataset_data = get_small_dataset(
             name=name,
             device=device,
             case_control=case_control,
@@ -521,6 +586,8 @@ def get_dataset(
         )
     else:
         raise Exception("Dataset not supported")
+    
+    return dataset_data
 
 
 def create_vae_pu_adapter(train, val, test, device="cuda"):

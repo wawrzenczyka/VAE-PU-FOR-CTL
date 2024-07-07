@@ -616,3 +616,38 @@ class VaePuTrainer:
 
         plt.savefig(fname)
         plt.close()
+
+    def _get_label_shifted_test_DL(self, label_shift_pi):
+        X, y = self.x_test, self.y_test
+        X_pos, y_pos = X[y == 1], y[y == 1]
+        X_neg, y_neg = X[y != 1], y[y != 1]
+
+        pi = torch.sum(y == 1) / len(y)
+        if pi < label_shift_pi:
+            n_pos = torch.sum(y == 1)
+            n_neg = int(n_pos * (1 - pi) / pi)
+
+            sampled_neg_idx = torch.ones(len(y_pos)).multinomial(num_samples=n_neg, replacement=True)
+            
+            X, y = torch.concat([
+                X_pos, X_neg[sampled_neg_idx]
+            ]), torch.concat([
+                y_pos, y_neg[sampled_neg_idx]
+            ])
+        elif pi > label_shift_pi:
+            n_neg = torch.sum(y != 1)
+            n_pos = int(n_neg * pi / (1 - pi))
+
+            sampled_pos_idx = torch.ones(len(y_pos)).multinomial(num_samples=n_pos, replacement=True)
+            
+            X, y = torch.concat([
+                X_neg, X_pos[sampled_pos_idx]
+            ]), torch.concat([
+                y_neg, y_pos[sampled_pos_idx]
+            ])
+
+        return DataLoader(
+            TensorDataset(X, y),
+            batch_size=self.config["batch_size_test"],
+            shuffle=True,
+        )

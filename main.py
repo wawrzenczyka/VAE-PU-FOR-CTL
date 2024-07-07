@@ -24,20 +24,15 @@ num_experiments = 10
 epoch_multiplier = 1
 
 datasets = [
-    "MNIST 0vALL",
-    "MNIST 1vALL",
-    "MNIST 2vALL",
-    "MNIST 3vALL",
-    "MNIST 4vALL",
-    "MNIST 5vALL",
-    "MNIST 6vALL",
-    "MNIST 7vALL",
-    "MNIST 8vALL",
-    "MNIST 9vALL",
+    "MNIST 3v5",
 ]
 
 training_modes = [
     "VAE-PU",
+]
+
+label_shift_pis = [
+    0.7, 0.5, 0.3
 ]
 
 case_control = False
@@ -91,16 +86,6 @@ if __name__ == "__main__":
         type=str,
         nargs="+",
         choices=[
-            "MNIST 0vALL",
-            "MNIST 1vALL",
-            "MNIST 2vALL",
-            "MNIST 3vALL",
-            "MNIST 4vALL",
-            "MNIST 5vALL",
-            "MNIST 6vALL",
-            "MNIST 7vALL",
-            "MNIST 8vALL",
-            "MNIST 9vALL",
             "MNIST 3v5",
             "MNIST OvE",
             "CIFAR CarTruck",
@@ -123,6 +108,7 @@ if __name__ == "__main__":
     parser.add_argument("-i", "--start_idx", type=int, required=False)
     parser.add_argument("-cc", "--case_control", action="store_true")
     parser.add_argument("-n", "--num_experiments", type=int, default=1, required=False)
+    parser.add_argument("-s", "--label_shift_pi", type=float | None, nargs="+", required=False)
     parser.add_argument("--f", type=str, required=False)
     args = parser.parse_args()
 
@@ -141,6 +127,8 @@ if __name__ == "__main__":
         case_control = args.case_control
     if args.num_experiments is not None:
         num_experiments = args.num_experiments
+    if args.label_shift_pi is not None:
+        label_shift_pis = args.label_shift_pi
 
     print("Device:", "cuda" if torch.cuda.is_available() else "cpu")
 
@@ -148,6 +136,8 @@ if __name__ == "__main__":
 n_threads = multiprocessing.cpu_count()
 sem = threading.Semaphore(n_threads)
 threads = []
+
+config['label_shift_pis'] = label_shift_pis
 
 for dataset in datasets:
     config["data"] = dataset
@@ -179,6 +169,7 @@ for dataset in datasets:
                     use_scar_labeling=config["use_SCAR"],
                     case_control=case_control,
                     synthetic_labels=synthetic_labels,
+                    label_shift_pi=label_shift_pi,
                 )
                 vae_pu_data = create_vae_pu_adapter(
                     train_samples, val_samples, test_samples, device
