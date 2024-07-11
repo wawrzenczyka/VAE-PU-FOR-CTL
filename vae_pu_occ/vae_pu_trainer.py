@@ -5,11 +5,15 @@ import time
 
 import matplotlib.pyplot as plt
 import numpy as np
+import pkbar
 import torch
+from torch.nn import BCEWithLogitsLoss
 from torch.optim import Adam
-from torch.utils.data import DataLoader, TensorDataset
+from torch.utils.data import DataLoader, TensorDataset, random_split
 
 from data_loading.utils import InfiniteDataLoader
+from metrics_custom import calculate_metrics
+from vae_pu_occ.early_stopping import EarlyStopping
 
 from .model import (
     VAEdecoder,
@@ -33,6 +37,7 @@ class VaePuTrainer:
         balanced_savage=False,
         unbalanced_savage=False,
         case_control=False,
+        augmented_label_shift=False,
     ):
         self.num_exp = num_exp
         self.config = model_config
@@ -46,6 +51,7 @@ class VaePuTrainer:
         self.balanced_savage = balanced_savage
         self.unbalanced_savage = unbalanced_savage
         self.case_control = case_control
+        self.augmented_label_shift = augmented_label_shift
 
         self.model_type = "VAE-PU"
         if self.case_control:
@@ -61,6 +67,8 @@ class VaePuTrainer:
             self.model_type += "-unbalanced-savage"
         elif self.balanced_savage:
             self.model_type += "-balanced-savage"
+        elif self.augmented_label_shift:
+            self.model_type += "-augmented-label-shift"
 
     def train(self, vae_pu_data):
         self._prepare_dataloaders(vae_pu_data)
@@ -173,31 +181,102 @@ class VaePuTrainer:
                 time.perf_counter() - self.baseline_training_start
             )
 
-            (
-                self.acc_pre_occ,
-                self.precision_pre_occ,
-                self.recall_pre_occ,
-                self.f1_pre_occ,
-                self.auc_pre_occ,
-                self.b_acc_pre_occ,
-            ) = self.model.accuracy(
-                self.DL_test,
-                balanced_cutoff=self.balanced_cutoff,
-                pi_p=self.config["pi_p"],
-            )
+            no_ls_s_model = self.train_no_ls_s_model()
 
-            metric_values = {
-                "Method": self.model_type,
-                "Accuracy": self.acc_pre_occ,
-                "Precision": self.precision_pre_occ,
-                "Recall": self.recall_pre_occ,
-                "F1 score": self.f1_pre_occ,
-                "AUC": self.auc_pre_occ,
-                "Balanced accuracy": self.b_acc_pre_occ,
-                "Time": self.baseline_training_time,
-            }
-            self._save_final_vae_pu_metric_values(metric_values)
+            for label_shift_pi in self.config["label_shift_pis"]:
+                ls_dataset = self._get_label_shifted_test_dataset(label_shift_pi)
+                ls_DL = DataLoader(
+                    ls_dataset,
+                    batch_size=self.config["batch_size_test"],
+                )
+
+                ls_s_model = self.train_ls_s_model(ls_dataset)
+
+                metric_values = self._calculate_ls_metrics(
+                    DL=ls_DL,
+                    ls_s_model=ls_s_model,
+                    no_ls_s_model=no_ls_s_model,
+                    method=self.model_type,
+                    time=self.baseline_training_time,
+                    ls_pi=label_shift_pi,
+                )
+                self._save_final_vae_pu_metric_values(metric_values, label_shift_pi)
         return self.model
+
+    def train_ls_s_model(self, ls_dataset):
+        ls_train_dataset, ls_val_dataset = random_split(
+            ls_dataset,
+            [int(0.8 * len(ls_dataset)), len(ls_dataset) - int(0.8 * len(ls_dataset))],
+        )
+        ls_train_DL, ls_val_DL = DataLoader(
+            ls_train_dataset,
+            batch_size=128,
+            shuffle=True,
+        ), DataLoader(
+            ls_val_dataset,
+            batch_size=128,
+        )
+        ls_s_model = self._train_custom_s_classifier(ls_train_DL, ls_val_DL)
+        return ls_s_model
+
+    def train_no_ls_s_model(self):
+        if hasattr(self, "no_shift_s_model") and self.no_shift_s_model is not None:
+            return self.no_shift_s_model
+
+        DL_train = DataLoader(
+            TensorDataset(
+                torch.concat([self.x_pl_full, self.x_u_full]),
+                torch.concat([self.y_pl_full, self.y_u_full]),
+                torch.concat(
+                    [
+                        torch.ones(self.x_pl_full.shape[0]).to(self.x_pl_full.device),
+                        torch.zeros(self.x_u_full.shape[0]).to(self.x_u_full.device),
+                    ]
+                ),
+            ),
+            batch_size=128,
+            shuffle=True,
+        )
+        DL_val = DataLoader(
+            TensorDataset(self.x_val, self.y_val, self.s_val),
+            batch_size=128,
+        )
+        self.no_shift_s_model = self._train_custom_s_classifier(DL_train, DL_val)
+        return self.no_shift_s_model
+
+    def _calculate_ls_metrics(self, DL, ls_s_model, no_ls_s_model, method, time, ls_pi):
+        y_probas = []
+        y_trues = []
+        ls_s_probas = []
+        no_ls_s_probas = []
+
+        for x, y, s in DL:
+            y_proba = self.model.model_pn.classify(x, sigmoid=True).reshape(-1)
+            ls_s_proba = ls_s_model.classify(x, sigmoid=True).reshape(-1)
+            no_ls_s_proba = no_ls_s_model.classify(x, sigmoid=True).reshape(-1)
+
+            y_probas.append(y_proba)
+            y_trues.append(y)
+            ls_s_probas.append(ls_s_proba)
+            no_ls_s_probas.append(no_ls_s_proba)
+
+        y_proba = torch.cat(y_probas).detach().cpu().numpy()
+        y_true = torch.cat(y_trues).detach().cpu().numpy()
+        ls_s_proba = torch.cat(ls_s_probas).detach().cpu().numpy()
+        no_ls_s_proba = torch.cat(no_ls_s_probas).detach().cpu().numpy()
+
+        metric_values = calculate_metrics(
+            y_proba,
+            y_true,
+            ls_s_probas,
+            no_ls_s_probas,
+            method=method,
+            time=time,
+            ls_pi=ls_pi,
+            augmented_label_shift=self.augmented_label_shift,
+        )
+
+        return metric_values
 
     def _prepare_metrics(self):
         self.elbos = []
@@ -211,10 +290,10 @@ class VaePuTrainer:
         self.timesAutoencoder = []
         self.timesTargetClassifier = []
 
-    def _save_final_vae_pu_metric_values(self, metric_values):
+    def _save_final_vae_pu_metric_values(self, metric_values, label_shift_pi):
         metrics_path = os.path.join(
             self.config["directory"],
-            f"metric_values_{self.model_type}.json",
+            f"metric_values_{self.model_type}_ls-{label_shift_pi:.2f}.json",
         )
         if self.use_original_paper_code:
             metrics_path = os.path.join(
@@ -290,6 +369,70 @@ class VaePuTrainer:
                     )
                 )
             log2.close()
+
+    def _train_custom_s_classifier(
+        self, DL_train_s, DL_val_s, epochs=200, lr=1e-4, use_early_stopping=True
+    ):
+        self.model_s = classifier_pn(self.config).to(self.config["device"])
+        opt_s = Adam(self.model_s.parameters(), lr=lr, eps=1e-07)
+        criterion = BCEWithLogitsLoss()
+
+        early_stopping = EarlyStopping(patience=10)
+
+        for epoch in range(epochs):
+            kbar = pkbar.Kbar(
+                target=len(DL_train_s),
+                epoch=epoch,
+                num_epochs=epochs,
+                width=8,
+                always_stateful=False,
+            )
+
+            self.model_s.train()
+
+            for i, (x, y, s) in enumerate(DL_train_s):
+                opt_s.zero_grad()
+
+                s_pred = self.model_s.classify(x, sigmoid=False).reshape(-1)
+                loss = criterion(s_pred, s)
+
+                loss.backward()
+                opt_s.step()
+
+                kbar.update(i, values=[("loss", loss.cpu().item())])
+
+            self.model_s.eval()
+
+            s_pred_no_sigm = []
+            s_true = []
+            for i, (x, y, s) in enumerate(DL_val_s):
+                s_pred_no_sigm.append(
+                    self.model_s.classify(x, sigmoid=False).reshape(-1)
+                )
+                s_true.append(s)
+            s_pred_no_sigm = torch.cat(s_pred_no_sigm)
+            s_true = torch.cat(s_true)
+            s_pred = torch.sigmoid(s_pred_no_sigm)
+
+            val_loss = criterion(s_pred_no_sigm, s_true)
+            val_acc = torch.sum((s_pred > 0.5) == s_true) / len(s_true)
+
+            kbar.add(
+                1,
+                values=[
+                    ("val_loss", val_loss.cpu().item()),
+                    ("val_acc", val_acc.cpu().item()),
+                ],
+            )
+
+            if use_early_stopping and early_stopping.check_stop(
+                epoch, val_loss, self.model_s
+            ):
+                return early_stopping.best_model
+
+        if use_early_stopping:
+            self.model_s = early_stopping.best_model
+        return self.model_s
 
     def _calculate_target_classifier_metrics(self, epoch, losses):
         targetLoss = np.mean(losses["Target classifier"])
@@ -572,14 +715,38 @@ class VaePuTrainer:
     def _load_trained_vae_pu(self):
         model_file = f"model_pre_occ_{self.model_type}.pt"
         model = torch.load(os.path.join(self.config["directory"], model_file))
-        with open(
+
+        if os.path.exists(
             os.path.join(
                 self.config["directory"],
                 f"metric_values_{self.model_type}.json",
-            ),
-            "r",
-        ) as f:
-            metric_values = json.load(f)
+            )
+        ):
+            with open(
+                os.path.join(
+                    self.config["directory"],
+                    f"metric_values_{self.model_type}.json",
+                ),
+                "r",
+            ) as f:
+                metric_values = json.load(f)
+        elif os.path.exists(
+            os.path.join(
+                self.config["directory"],
+                f"metric_values_{self.model_type}_ls-0.50.json",
+            )
+        ):
+            with open(
+                os.path.join(
+                    self.config["directory"],
+                    f"metric_values_{self.model_type}_ls-0.50.json",
+                ),
+                "r",
+            ) as f:
+                metric_values = json.load(f)
+        else:
+            raise Exception("No metrics file")
+
         (
             self.acc_pre_occ,
             self.precision_pre_occ,
@@ -617,37 +784,40 @@ class VaePuTrainer:
         plt.savefig(fname)
         plt.close()
 
-    def _get_label_shifted_test_DL(self, label_shift_pi):
-        X, y = self.x_test, self.y_test
-        X_pos, y_pos = X[y == 1], y[y == 1]
-        X_neg, y_neg = X[y != 1], y[y != 1]
+    def _get_label_shifted_test_dataset(self, label_shift_pi):
+        X, y, s = self.x_test, self.y_test, self.s_test
+        if label_shift_pi is None:
+            return TensorDataset(X, y, s)
+
+        X_pos, y_pos, s_pos = X[y == 1], y[y == 1], s[y == 1]
+        X_neg, y_neg, s_neg = X[y != 1], y[y != 1], s[y != 1]
 
         pi = torch.sum(y == 1) / len(y)
         if pi < label_shift_pi:
             n_pos = torch.sum(y == 1)
             n_neg = int(n_pos * (1 - pi) / pi)
 
-            sampled_neg_idx = torch.ones(len(y_pos)).multinomial(num_samples=n_neg, replacement=True)
-            
-            X, y = torch.concat([
-                X_pos, X_neg[sampled_neg_idx]
-            ]), torch.concat([
-                y_pos, y_neg[sampled_neg_idx]
-            ])
+            sampled_neg_idx = torch.ones(len(y_pos)).multinomial(
+                num_samples=n_neg, replacement=True
+            )
+
+            X, y, s = (
+                torch.concat([X_pos, X_neg[sampled_neg_idx]]),
+                torch.concat([y_pos, y_neg[sampled_neg_idx]]),
+                torch.concat([s_pos, s_neg[sampled_neg_idx]]),
+            )
         elif pi > label_shift_pi:
             n_neg = torch.sum(y != 1)
             n_pos = int(n_neg * pi / (1 - pi))
 
-            sampled_pos_idx = torch.ones(len(y_pos)).multinomial(num_samples=n_pos, replacement=True)
-            
-            X, y = torch.concat([
-                X_neg, X_pos[sampled_pos_idx]
-            ]), torch.concat([
-                y_neg, y_pos[sampled_pos_idx]
-            ])
+            sampled_pos_idx = torch.ones(len(y_pos)).multinomial(
+                num_samples=n_pos, replacement=True
+            )
 
-        return DataLoader(
-            TensorDataset(X, y),
-            batch_size=self.config["batch_size_test"],
-            shuffle=True,
-        )
+            X, y, s = (
+                torch.concat([X_neg, X_pos[sampled_pos_idx]]),
+                torch.concat([y_neg, y_pos[sampled_pos_idx]]),
+                torch.concat([s_neg, s_pos[sampled_pos_idx]]),
+            )
+
+        return TensorDataset(X, y, s)

@@ -1,26 +1,10 @@
 datasets=(
-    "MNIST 0vALL"
-    "MNIST 1vALL"
-    "MNIST 2vALL"
-    "MNIST 3vALL"
-    "MNIST 4vALL"
-    "MNIST 5vALL"
-    "MNIST 6vALL"
-    "MNIST 7vALL"
-    "MNIST 8vALL"
-    "MNIST 9vALL"
     "MNIST 3v5"
     "MNIST OvE"
-    "CIFAR CarTruck"
-    "CIFAR MachineAnimal"
 )
 training_modes=(
     "VAE-PU"
-    "VAE-PU-balanced-risk"
-    "VAE-PU-balanced-cutoff"
-    "VAE-PU-balanced-logit"
-    "VAE-PU-balanced-savage"
-    "VAE-PU-unbalanced-savage"
+    "VAE-PU-augmented-label-shift"
 )
 label_frequencies=(
     0.02

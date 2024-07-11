@@ -42,6 +42,7 @@ class VaePuOccTrainer(VaePuTrainer):
         balanced_savage=False,
         unbalanced_savage=False,
         case_control=False,
+        augmented_label_shift=False,
     ):
         super(VaePuOccTrainer, self).__init__(
             num_exp,
@@ -53,6 +54,7 @@ class VaePuOccTrainer(VaePuTrainer):
             balanced_savage,
             unbalanced_savage,
             case_control,
+            augmented_label_shift,
         )
 
     def train(self, vae_pu_data):
@@ -625,42 +627,40 @@ class VaePuOccTrainer(VaePuTrainer):
         )
 
     def _save_vae_pu_occ_metrics(self, occ_method, occ_metrics, best_epoch):
-        for label_shift_pi in self.config['label_shift_pis']:
-            os.makedirs(
-                os.path.join(self.config["directory"], "occ", occ_method), exist_ok=True
+        os.makedirs(
+            os.path.join(self.config["directory"], "occ", occ_method), exist_ok=True
+        )
+        no_ls_s_model = self.train_no_ls_s_model()
+
+        for label_shift_pi in self.config["label_shift_pis"]:
+            ls_dataset = self._get_label_shifted_test_dataset(label_shift_pi)
+            ls_DL = DataLoader(
+                ls_dataset,
+                batch_size=self.config["batch_size_test"],
             )
-            acc, precision, recall, f1_score, auc, b_acc = self.model.accuracy(
-                # self.DL_test,
-                self._get_label_shifted_test_DL(label_shift_pi),
-                balanced_cutoff=self.balanced_cutoff,
-                pi_p=self.config["pi_p"],
+
+            ls_s_model = self.train_ls_s_model(ls_dataset)
+
+            metric_values = self._calculate_ls_metrics(
+                DL=ls_DL,
+                ls_s_model=ls_s_model,
+                no_ls_s_model=no_ls_s_model,
+                method=f"{self.model_type}+{occ_method}",
+                time=self.occ_training_time,
+                ls_pi=label_shift_pi,
             )
-            occ_acc, occ_auc, occ_precision, occ_recall, occ_f1, occ_fdr = occ_metrics
-            metric_values = {
-                "Method": f"{self.model_type}+{occ_method}",
-                "Label shift pi": label_shift_pi,
-                "OCC accuracy": occ_acc,
-                "OCC precision": occ_precision,
-                "OCC recall": occ_recall,
-                "OCC F1 score": occ_f1,
-                "OCC AUC": occ_auc,
-                "Accuracy": acc,
-                "Precision": precision,
-                "Recall": recall,
-                "AUC": auc,
-                "Balanced accuracy": b_acc,
-                "F1 score": f1_score,
-                "Best epoch": best_epoch + 1,
-            }
+
             if self.baseline_training_time is not None:
-                metric_values["Time"] = self.baseline_training_time + self.occ_training_time
+                metric_values["Time"] = (
+                    self.baseline_training_time + self.occ_training_time
+                )
 
             with open(
                 os.path.join(
                     self.config["directory"],
                     "occ",
                     occ_method,
-                    f"metric_values_{self.model_type}+{occ_method}-ls-{label_shift_pi:.2f}.json",
+                    f"metric_values_{self.model_type}+{occ_method}_ls-{label_shift_pi:.2f}.json",
                 ),
                 "w",
             ) as f:

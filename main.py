@@ -4,6 +4,7 @@ import multiprocessing
 import os
 import threading
 import time
+from typing import Optional
 
 import numpy as np
 import tensorflow as tf
@@ -20,7 +21,7 @@ from vae_pu_occ.vae_pu_occ_trainer import VaePuOccTrainer
 label_frequencies = [0.9, 0.7, 0.5, 0.3, 0.1, 0.02]
 
 start_idx = 0
-num_experiments = 10
+num_experiments = 1
 epoch_multiplier = 1
 
 datasets = [
@@ -31,9 +32,7 @@ training_modes = [
     "VAE-PU",
 ]
 
-label_shift_pis = [
-    0.7, 0.5, 0.3
-]
+label_shift_pis = [0.9, 0.7, 0.5, 0.3, 0.1]
 
 case_control = False
 synthetic_labels = False
@@ -46,9 +45,7 @@ else:
 config["occ_methods"] = [
     # "IsolationForest",
     # "A^3",
-    # "OddsRatio-PUprop-e200-lr1e-4",
-    "OddsRatio-PUprop-cautious-1-e200-lr1e-4",
-    "OddsRatio-PUprop-cautious-2-e200-lr1e-4",
+    "OddsRatio-PUprop-e200-lr1e-4",
 ]
 
 config["use_original_paper_code"] = False
@@ -91,7 +88,7 @@ if __name__ == "__main__":
             "CIFAR CarTruck",
             "CIFAR MachineAnimal",
         ],
-        default=["MNIST 0vALL"],
+        default=["MNIST 3v5"],
         required=False,
     )
     parser.add_argument(
@@ -101,6 +98,7 @@ if __name__ == "__main__":
         nargs="+",
         choices=[
             "VAE-PU",
+            "VAE-PU-augmented-label-shift",
         ],
         required=False,
     )
@@ -108,7 +106,9 @@ if __name__ == "__main__":
     parser.add_argument("-i", "--start_idx", type=int, required=False)
     parser.add_argument("-cc", "--case_control", action="store_true")
     parser.add_argument("-n", "--num_experiments", type=int, default=1, required=False)
-    parser.add_argument("-s", "--label_shift_pi", type=float | None, nargs="+", required=False)
+    parser.add_argument(
+        "-ls", "--label_shift_pi", type=Optional[float], nargs="+", required=False
+    )
     parser.add_argument("--f", type=str, required=False)
     args = parser.parse_args()
 
@@ -137,7 +137,7 @@ n_threads = multiprocessing.cpu_count()
 sem = threading.Semaphore(n_threads)
 threads = []
 
-config['label_shift_pis'] = label_shift_pis
+config["label_shift_pis"] = label_shift_pis
 
 for dataset in datasets:
     config["data"] = dataset
@@ -169,7 +169,6 @@ for dataset in datasets:
                     use_scar_labeling=config["use_SCAR"],
                     case_control=case_control,
                     synthetic_labels=synthetic_labels,
-                    label_shift_pi=label_shift_pi,
                 )
                 vae_pu_data = create_vae_pu_adapter(
                     train_samples, val_samples, test_samples, device
@@ -273,6 +272,8 @@ for dataset in datasets:
                         model_config=config,
                         pretrain=True,
                         case_control=case_control,
+                        augmented_label_shift="augmented-label-shift"
+                        in config["training_mode"],
                     )
                     trainer.train(vae_pu_data)
                 else:
