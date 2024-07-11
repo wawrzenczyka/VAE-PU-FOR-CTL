@@ -11,11 +11,15 @@ def calculate_metrics(
     ls_pi=None,
     time=None,
     augmented_label_shift=False,
+    em_label_shift=False,
+    em_label_shift_proba_function=None,
 ):
     y = np.where(y == 1, 1, 0)
 
     if augmented_label_shift:
         y_pred = np.where(y_proba * ls_s_proba / no_ls_s_proba > 0.5, 1, 0)
+    elif em_label_shift:
+        y_pred = np.where(em_label_shift_proba_function(y_proba) > 0.5, 1, 0)
     else:
         y_pred = np.where(y_proba > 0.5, 1, 0)
 

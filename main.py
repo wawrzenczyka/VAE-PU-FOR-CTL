@@ -18,7 +18,14 @@ from external.sar_experiment import SAREMThreadedExperiment
 from external.two_step import eval_2_step, train_2_step
 from vae_pu_occ.vae_pu_occ_trainer import VaePuOccTrainer
 
-label_frequencies = [0.9, 0.7, 0.5, 0.3, 0.1, 0.02]
+label_frequencies = [
+    # 0.9,
+    # 0.7,
+    0.5,
+    # 0.3,
+    # 0.1,
+    # 0.02
+]
 
 start_idx = 0
 num_experiments = 1
@@ -29,7 +36,9 @@ datasets = [
 ]
 
 training_modes = [
-    "VAE-PU",
+    # "VAE-PU",
+    # "VAE-PU-augmented-label-shift",
+    "VAE-PU-EM-label-shift",
 ]
 
 label_shift_pis = [0.9, 0.7, 0.5, 0.3, 0.1]
@@ -99,6 +108,7 @@ if __name__ == "__main__":
         choices=[
             "VAE-PU",
             "VAE-PU-augmented-label-shift",
+            "VAE-PU-EM-label-shift",
         ],
         required=False,
     )
@@ -274,6 +284,7 @@ for dataset in datasets:
                         case_control=case_control,
                         augmented_label_shift="augmented-label-shift"
                         in config["training_mode"],
+                        em_label_shift="EM-label-shift" in config["training_mode"],
                     )
                     trainer.train(vae_pu_data)
                 else:

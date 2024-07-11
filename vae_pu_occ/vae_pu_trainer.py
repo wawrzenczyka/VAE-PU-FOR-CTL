@@ -38,6 +38,7 @@ class VaePuTrainer:
         unbalanced_savage=False,
         case_control=False,
         augmented_label_shift=False,
+        em_label_shift=False,
     ):
         self.num_exp = num_exp
         self.config = model_config
@@ -52,6 +53,7 @@ class VaePuTrainer:
         self.unbalanced_savage = unbalanced_savage
         self.case_control = case_control
         self.augmented_label_shift = augmented_label_shift
+        self.em_label_shift = em_label_shift
 
         self.model_type = "VAE-PU"
         if self.case_control:
@@ -69,6 +71,8 @@ class VaePuTrainer:
             self.model_type += "-balanced-savage"
         elif self.augmented_label_shift:
             self.model_type += "-augmented-label-shift"
+        elif self.em_label_shift:
+            self.model_type += "-EM-label-shift"
 
     def train(self, vae_pu_data):
         self._prepare_dataloaders(vae_pu_data)
@@ -181,7 +185,8 @@ class VaePuTrainer:
                 time.perf_counter() - self.baseline_training_start
             )
 
-            no_ls_s_model = self.train_no_ls_s_model()
+            if self.augmented_label_shift:
+                no_ls_s_model = self.train_no_ls_s_model()
 
             for label_shift_pi in self.config["label_shift_pis"]:
                 ls_dataset = self._get_label_shifted_test_dataset(label_shift_pi)
@@ -190,7 +195,10 @@ class VaePuTrainer:
                     batch_size=self.config["batch_size_test"],
                 )
 
-                ls_s_model = self.train_ls_s_model(ls_dataset)
+                if self.augmented_label_shift:
+                    ls_s_model = self.train_ls_s_model(ls_dataset)
+                elif self.em_label_shift:
+                    self.fit_label_shift_EM(DL=ls_DL)
 
                 metric_values = self._calculate_ls_metrics(
                     DL=ls_DL,
@@ -244,6 +252,40 @@ class VaePuTrainer:
         self.no_shift_s_model = self._train_custom_s_classifier(DL_train, DL_val)
         return self.no_shift_s_model
 
+    def fit_label_shift_EM(self, DL):
+        y_probas = []
+
+        for x, _ in self.DL:
+            y_proba = self.model.model_pn.classify(x, sigmoid=True).reshape(-1)
+            y_probas.append(y_proba)
+
+        y_proba = torch.cat(y_probas).detach().cpu().numpy()
+
+        pi_shift = 0.5
+        pi = self.config["pi_pl"]
+
+        tol = 1e-5
+        while True:
+            pi_shift_prev = pi_shift
+            P_ls = self.P_ls_EM(y_proba, pi_shift, pi)
+            pi_shift = np.mean(P_ls)
+
+            if np.abs(pi_shift_prev - pi) < tol:
+                self.pi_shift_EM = pi_shift
+                break
+            else:
+                tol += 1e-5
+
+    def P_ls_EM(self, y_proba, pi_shift, pi):
+        return ((pi_shift / pi) * y_proba) / (
+            ((pi_shift / pi) * y_proba) + (((1 - pi_shift) / (1 - pi)) * (1 - y_proba))
+        )
+
+    def get_EM_label_shift_proba_function(self):
+        return lambda y_proba, pi_shift=self.pi_shift_EM, pi=self.config[
+            "pi_pl"
+        ]: self.P_ls_EM(self, y_proba, pi_shift, pi)
+
     def _calculate_ls_metrics(self, DL, ls_s_model, no_ls_s_model, method, time, ls_pi):
         y_probas = []
         y_trues = []
@@ -274,6 +316,8 @@ class VaePuTrainer:
             time=time,
             ls_pi=ls_pi,
             augmented_label_shift=self.augmented_label_shift,
+            em_label_shift=self.em_label_shift,
+            em_label_shift_proba_function=self.get_EM_label_shift_proba_function(),
         )
 
         return metric_values
@@ -794,10 +838,10 @@ class VaePuTrainer:
 
         pi = torch.sum(y == 1) / len(y)
         if pi < label_shift_pi:
-            n_pos = torch.sum(y == 1)
+            n_pos = torch.sum(y == 1).item()
             n_neg = int(n_pos * (1 - pi) / pi)
 
-            sampled_neg_idx = torch.ones(len(y_pos)).multinomial(
+            sampled_neg_idx = torch.ones(len(y_neg)).multinomial(
                 num_samples=n_neg, replacement=True
             )
 

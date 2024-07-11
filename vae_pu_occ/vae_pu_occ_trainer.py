@@ -43,6 +43,7 @@ class VaePuOccTrainer(VaePuTrainer):
         unbalanced_savage=False,
         case_control=False,
         augmented_label_shift=False,
+        em_label_shift=False,
     ):
         super(VaePuOccTrainer, self).__init__(
             num_exp,
@@ -55,6 +56,7 @@ class VaePuOccTrainer(VaePuTrainer):
             unbalanced_savage,
             case_control,
             augmented_label_shift,
+            em_label_shift,
         )
 
     def train(self, vae_pu_data):
@@ -630,7 +632,9 @@ class VaePuOccTrainer(VaePuTrainer):
         os.makedirs(
             os.path.join(self.config["directory"], "occ", occ_method), exist_ok=True
         )
-        no_ls_s_model = self.train_no_ls_s_model()
+
+        if self.augmented_label_shift:
+            no_ls_s_model = self.train_no_ls_s_model()
 
         for label_shift_pi in self.config["label_shift_pis"]:
             ls_dataset = self._get_label_shifted_test_dataset(label_shift_pi)
@@ -639,7 +643,10 @@ class VaePuOccTrainer(VaePuTrainer):
                 batch_size=self.config["batch_size_test"],
             )
 
-            ls_s_model = self.train_ls_s_model(ls_dataset)
+            if self.augmented_label_shift:
+                ls_s_model = self.train_ls_s_model(ls_dataset)
+            elif self.em_label_shift:
+                self.fit_label_shift_EM(DL=ls_DL)
 
             metric_values = self._calculate_ls_metrics(
                 DL=ls_DL,
@@ -648,6 +655,8 @@ class VaePuOccTrainer(VaePuTrainer):
                 method=f"{self.model_type}+{occ_method}",
                 time=self.occ_training_time,
                 ls_pi=label_shift_pi,
+                em_label_shift=self.em_label_shift,
+                em_label_shift_proba_function=self.get_EM_label_shift_proba_function(),
             )
 
             if self.baseline_training_time is not None:
