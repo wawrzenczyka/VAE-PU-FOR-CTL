@@ -202,8 +202,8 @@ class VaePuTrainer:
 
                 metric_values = self._calculate_ls_metrics(
                     DL=ls_DL,
-                    ls_s_model=ls_s_model,
-                    no_ls_s_model=no_ls_s_model,
+                    ls_s_model=ls_s_model if self.augmented_label_shift else None,
+                    no_ls_s_model=no_ls_s_model if self.augmented_label_shift else None,
                     method=self.model_type,
                     time=self.baseline_training_time,
                     ls_pi=label_shift_pi,
@@ -255,7 +255,7 @@ class VaePuTrainer:
     def fit_label_shift_EM(self, DL):
         y_probas = []
 
-        for x, _ in self.DL:
+        for x, _, _ in DL:
             y_proba = self.model.model_pn.classify(x, sigmoid=True).reshape(-1)
             y_probas.append(y_proba)
 
@@ -284,7 +284,7 @@ class VaePuTrainer:
     def get_EM_label_shift_proba_function(self):
         return lambda y_proba, pi_shift=self.pi_shift_EM, pi=self.config[
             "pi_pl"
-        ]: self.P_ls_EM(self, y_proba, pi_shift, pi)
+        ]: self.P_ls_EM(y_proba, pi_shift, pi)
 
     def _calculate_ls_metrics(self, DL, ls_s_model, no_ls_s_model, method, time, ls_pi):
         y_probas = []
@@ -294,24 +294,28 @@ class VaePuTrainer:
 
         for x, y, s in DL:
             y_proba = self.model.model_pn.classify(x, sigmoid=True).reshape(-1)
-            ls_s_proba = ls_s_model.classify(x, sigmoid=True).reshape(-1)
-            no_ls_s_proba = no_ls_s_model.classify(x, sigmoid=True).reshape(-1)
-
             y_probas.append(y_proba)
             y_trues.append(y)
-            ls_s_probas.append(ls_s_proba)
-            no_ls_s_probas.append(no_ls_s_proba)
+
+            if ls_s_model is not None:
+                ls_s_proba = ls_s_model.classify(x, sigmoid=True).reshape(-1)
+                ls_s_probas.append(ls_s_proba)
+            if no_ls_s_model is not None:
+                no_ls_s_proba = no_ls_s_model.classify(x, sigmoid=True).reshape(-1)
+                no_ls_s_probas.append(no_ls_s_proba)
 
         y_proba = torch.cat(y_probas).detach().cpu().numpy()
         y_true = torch.cat(y_trues).detach().cpu().numpy()
-        ls_s_proba = torch.cat(ls_s_probas).detach().cpu().numpy()
-        no_ls_s_proba = torch.cat(no_ls_s_probas).detach().cpu().numpy()
+        if ls_s_model is not None:
+            ls_s_proba = torch.cat(ls_s_probas).detach().cpu().numpy()
+        if no_ls_s_model is not None:
+            no_ls_s_proba = torch.cat(no_ls_s_probas).detach().cpu().numpy()
 
         metric_values = calculate_metrics(
             y_proba,
             y_true,
-            ls_s_probas,
-            no_ls_s_probas,
+            ls_s_proba if ls_s_model is not None else None,
+            no_ls_s_proba if no_ls_s_model is not None else None,
             method=method,
             time=time,
             ls_pi=ls_pi,
