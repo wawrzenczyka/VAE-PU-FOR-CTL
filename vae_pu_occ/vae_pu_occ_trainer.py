@@ -652,13 +652,11 @@ class VaePuOccTrainer(VaePuTrainer):
 
             metric_values = self._calculate_ls_metrics(
                 DL=ls_DL,
-                ls_s_model=ls_s_model,
-                no_ls_s_model=no_ls_s_model,
+                ls_s_model=ls_s_model if self.augmented_label_shift else None,
+                no_ls_s_model=no_ls_s_model if self.augmented_label_shift else None,
                 method=f"{self.model_type}+{occ_method}",
                 time=self.occ_training_time,
                 ls_pi=label_shift_pi,
-                em_label_shift=self.em_label_shift,
-                em_label_shift_proba_function=self.get_label_shift_proba_function(),
             )
 
             if self.baseline_training_time is not None:
