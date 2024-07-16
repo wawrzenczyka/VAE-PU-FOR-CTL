@@ -6,6 +6,7 @@ training_modes=(
     "VAE-PU"
     "VAE-PU-augmented-label-shift"
     "VAE-PU-EM-label-shift"
+    "VAE-PU-simple-label-shift"
 )
 label_frequencies=(
     0.02

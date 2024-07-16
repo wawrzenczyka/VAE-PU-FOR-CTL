@@ -39,6 +39,7 @@ training_modes = [
     # "VAE-PU",
     # "VAE-PU-augmented-label-shift",
     "VAE-PU-EM-label-shift",
+    # "VAE-PU-simple-label-shift",
 ]
 
 label_shift_pis = [0.9, 0.7, 0.5, 0.3, 0.1]
@@ -109,6 +110,7 @@ if __name__ == "__main__":
             "VAE-PU",
             "VAE-PU-augmented-label-shift",
             "VAE-PU-EM-label-shift",
+            "VAE-PU-simple-label-shift",
         ],
         required=False,
     )
@@ -285,6 +287,8 @@ for dataset in datasets:
                         augmented_label_shift="augmented-label-shift"
                         in config["training_mode"],
                         em_label_shift="EM-label-shift" in config["training_mode"],
+                        simple_label_shift="simple-label-shift"
+                        in config["training_mode"],
                     )
                     trainer.train(vae_pu_data)
                 else:

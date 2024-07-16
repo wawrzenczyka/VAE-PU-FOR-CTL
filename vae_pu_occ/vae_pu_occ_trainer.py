@@ -44,6 +44,7 @@ class VaePuOccTrainer(VaePuTrainer):
         case_control=False,
         augmented_label_shift=False,
         em_label_shift=False,
+        simple_label_shift=False,
     ):
         super(VaePuOccTrainer, self).__init__(
             num_exp,
@@ -57,6 +58,7 @@ class VaePuOccTrainer(VaePuTrainer):
             case_control,
             augmented_label_shift,
             em_label_shift,
+            simple_label_shift,
         )
 
     def train(self, vae_pu_data):
@@ -656,7 +658,7 @@ class VaePuOccTrainer(VaePuTrainer):
                 time=self.occ_training_time,
                 ls_pi=label_shift_pi,
                 em_label_shift=self.em_label_shift,
-                em_label_shift_proba_function=self.get_EM_label_shift_proba_function(),
+                em_label_shift_proba_function=self.get_label_shift_proba_function(),
             )
 
             if self.baseline_training_time is not None:

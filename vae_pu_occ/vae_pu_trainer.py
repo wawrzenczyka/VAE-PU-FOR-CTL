@@ -39,6 +39,7 @@ class VaePuTrainer:
         case_control=False,
         augmented_label_shift=False,
         em_label_shift=False,
+        simple_label_shift=False,
     ):
         self.num_exp = num_exp
         self.config = model_config
@@ -54,6 +55,7 @@ class VaePuTrainer:
         self.case_control = case_control
         self.augmented_label_shift = augmented_label_shift
         self.em_label_shift = em_label_shift
+        self.simple_label_shift = simple_label_shift
 
         self.model_type = "VAE-PU"
         if self.case_control:
@@ -73,6 +75,8 @@ class VaePuTrainer:
             self.model_type += "-augmented-label-shift"
         elif self.em_label_shift:
             self.model_type += "-EM-label-shift"
+        elif self.simple_label_shift:
+            self.model_type += "-simple-label-shift"
 
     def train(self, vae_pu_data):
         self._prepare_dataloaders(vae_pu_data)
@@ -199,6 +203,8 @@ class VaePuTrainer:
                     ls_s_model = self.train_ls_s_model(ls_dataset)
                 elif self.em_label_shift:
                     self.fit_label_shift_EM(DL=ls_DL)
+                elif self.simple_label_shift:
+                    self.fit_label_shift_simple(DL=ls_DL)
 
                 metric_values = self._calculate_ls_metrics(
                     DL=ls_DL,
@@ -281,10 +287,10 @@ class VaePuTrainer:
             ((pi_shift / pi) * y_proba) + (((1 - pi_shift) / (1 - pi)) * (1 - y_proba))
         )
 
-    def get_EM_label_shift_proba_function(self):
-        return lambda y_proba, pi_shift=self.pi_shift_EM, pi=self.config[
-            "pi_pl"
-        ]: self.P_ls_EM(y_proba, pi_shift, pi)
+    def get_label_shift_proba_function(self, pi_shift):
+        return lambda y_proba, pi_shift=pi_shift, pi=self.config["pi_pl"]: self.P_ls_EM(
+            y_proba, pi_shift, pi
+        )
 
     def _calculate_ls_metrics(self, DL, ls_s_model, no_ls_s_model, method, time, ls_pi):
         y_probas = []
@@ -321,10 +327,31 @@ class VaePuTrainer:
             ls_pi=ls_pi,
             augmented_label_shift=self.augmented_label_shift,
             em_label_shift=self.em_label_shift,
-            em_label_shift_proba_function=self.get_EM_label_shift_proba_function(),
+            em_label_shift_proba_function=self.get_label_shift_proba_function(
+                self.pi_shift_EM
+            ),
+            simple_label_shift=self.simple_label_shift,
+            simple_label_shift_proba_function=self.get_label_shift_proba_function(
+                self.pi_shift_simple
+            ),
         )
 
         return metric_values
+
+    def fit_label_shift_simple(self, DL):
+        s_shifts = []
+
+        for _, _, s in DL:
+            s_shifts.append(s)
+
+        s_shift = torch.cat(s_shifts).detach().cpu().numpy()
+
+        s_prior_shift = torch.sum(s_shift == 1) / len(s_shift)
+        s_prior = len(self.x_pl_full) / (len(self.x_pl_full) + len(self.x_u_full))
+
+        pi = self.config["pi_pl"]
+        pi_shift = (s_prior_shift / s_prior) * pi
+        self.pi_shift_simple = pi_shift
 
     def _prepare_metrics(self):
         self.elbos = []
