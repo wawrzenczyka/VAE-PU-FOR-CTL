@@ -1,6 +1,10 @@
 datasets=(
     "MNIST 3v5"
     "MNIST OvE"
+    "CIFAR CarTruck"
+    "CIFAR MachineAnimal"
+    "STL MachineAnimal"
+    "CDC-Diabetes"
 )
 training_modes=(
     "VAE-PU"

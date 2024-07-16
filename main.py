@@ -97,6 +97,8 @@ if __name__ == "__main__":
             "MNIST OvE",
             "CIFAR CarTruck",
             "CIFAR MachineAnimal",
+            "STL MachineAnimal",
+            "CDC-Diabetes",
         ],
         default=["MNIST 3v5"],
         required=False,
@@ -119,7 +121,7 @@ if __name__ == "__main__":
     parser.add_argument("-cc", "--case_control", action="store_true")
     parser.add_argument("-n", "--num_experiments", type=int, default=1, required=False)
     parser.add_argument(
-        "-ls", "--label_shift_pi", type=Optional[float], nargs="+", required=False
+        "-ls", "--label_shift_pi", type=float, nargs="+", required=False
     )
     parser.add_argument("--f", type=str, required=False)
     args = parser.parse_args()

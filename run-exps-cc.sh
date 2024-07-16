@@ -1,6 +1,10 @@
 datasets=(
     "MNIST 3v5"
     "MNIST OvE"
+    "CIFAR CarTruck"
+    "CIFAR MachineAnimal"
+    "STL MachineAnimal"
+    "CDC-Diabetes"
 )
 training_modes=(
     "VAE-PU"
@@ -9,12 +13,12 @@ training_modes=(
     "VAE-PU-simple-label-shift"
 )
 label_frequencies=(
-    0.02
-    0.1
     0.3
-    0.5
     0.7
+    0.5
+    0.1
     0.9
+    0.02
 )
 start_idxs=(
     0
