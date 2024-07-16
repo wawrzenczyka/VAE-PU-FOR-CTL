@@ -328,11 +328,11 @@ class VaePuTrainer:
             augmented_label_shift=self.augmented_label_shift,
             em_label_shift=self.em_label_shift,
             em_label_shift_proba_function=self.get_label_shift_proba_function(
-                self.pi_shift_EM if hasattr("pi_shift_EM", self) else None
+                self.pi_shift_EM if hasattr(self, "pi_shift_EM") else None
             ),
             simple_label_shift=self.simple_label_shift,
             simple_label_shift_proba_function=self.get_label_shift_proba_function(
-                self.pi_shift_simple if hasattr("pi_shift_simple", self) else None
+                self.pi_shift_simple if hasattr(self, "pi_shift_simple") else None
             ),
         )
 
