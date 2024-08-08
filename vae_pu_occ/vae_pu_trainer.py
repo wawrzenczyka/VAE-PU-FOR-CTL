@@ -346,7 +346,7 @@ class VaePuTrainer:
 
         s_shift = torch.cat(s_shifts).detach().cpu().numpy()
 
-        s_prior_shift = torch.sum(s_shift == 1) / len(s_shift)
+        s_prior_shift = np.mean(s_shift == 1)
         s_prior = len(self.x_pl_full) / (len(self.x_pl_full) + len(self.x_u_full))
 
         pi = self.config["pi_pl"]
