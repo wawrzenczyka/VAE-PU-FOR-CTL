@@ -103,27 +103,16 @@ results_df = pd.DataFrame.from_records(results)
 results_df = results_df[~results_df.Method.str.contains("SRuleOnly")]
 
 results_df["BaseMethod"] = "VAE-PU"
-results_df["Balancing"] = np.where(
-    results_df.Method.str.contains("balanced-cutoff"),
-    "Cutoff",
+results_df["LabelShiftMethod"] = np.where(
+    results_df.Method.str.contains("augmented-label-shift"),
+    "Augmented",
     np.where(
-        results_df.Method.str.contains("balanced-risk"),
-        "Risk",
+        results_df.Method.str.contains("EM-label-shift"),
+        "EM",
         np.where(
-            results_df.Method.str.contains("balanced-logit"),
-            "Logit",
-            np.where(
-                (
-                    results_df.Method.str.contains("balanced-savage")
-                    & ~results_df.Method.str.contains("unbalanced-savage")
-                ),
-                "Savage",
-                np.where(
-                    results_df.Method.str.contains("unbalanced-savage"),
-                    "Unbalanced Savage",
-                    "None",
-                ),
-            ),
+            results_df.Method.str.contains("simple-label-shift"),
+            "Simple",
+            "None",
         ),
     ),
 )
@@ -168,20 +157,20 @@ results_df["OCC"] = np.where(
 results_df
 
 # %%
-os.makedirs("balanced_metrics", exist_ok=True)
+os.makedirs("label_shift_metrics", exist_ok=True)
 
-for metric in ["Precision", "Recall", "F1 score", "Balanced accuracy"]:
+for metric in ["Accuracy", "Precision", "Recall", "F1 score", "Balanced accuracy"]:
     pivot = results_df.pivot_table(
         values=metric,
-        index=["c", "Dataset"],
-        columns=["BaseMethod", "Balancing", "OCC"],
+        index=["c", "Dataset", "Label shift \\pi"],
+        columns=["BaseMethod", "LabelShiftMethod", "OCC"],
     )
     pivot
     # results_df.pivot_table(values='Balanced accuracy', index=['c', "Dataset"], columns=["BaseMethod", "Balancing", "OCC"])
     max_pivot = pivot.applymap(lambda a: f"{a * 100:.1f}") + np.where(
         pivot.eq(pivot.max(axis=1), axis=0), "*", ""
     )
-    max_pivot.to_csv(os.path.join("balanced_metrics", f"{metric}.csv"))
+    max_pivot.to_csv(os.path.join("label_shift_metrics", f"{metric}.csv"))
 
 # %%
 for dataset, rename in [
