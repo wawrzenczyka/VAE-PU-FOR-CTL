@@ -4,7 +4,6 @@ import multiprocessing
 import os
 import threading
 import time
-from typing import Optional
 
 import numpy as np
 import tensorflow as tf
@@ -36,13 +35,18 @@ datasets = [
 ]
 
 training_modes = [
-    # "VAE-PU",
-    # "VAE-PU-augmented-label-shift",
-    "VAE-PU-EM-label-shift",
-    # "VAE-PU-simple-label-shift",
+    "VAE-PU",
 ]
 
 label_shift_pis = [0.9, 0.7, 0.5, 0.3, 0.1]
+label_shift_methods = [
+    "None",
+    "Augmented label shift",
+    "Cutoff label shift",
+    "Odds ratio label shift",
+    "EM label shift",
+    "Simple label shift",
+]
 
 case_control = False
 synthetic_labels = False
@@ -110,9 +114,6 @@ if __name__ == "__main__":
         nargs="+",
         choices=[
             "VAE-PU",
-            "VAE-PU-augmented-label-shift",
-            "VAE-PU-EM-label-shift",
-            "VAE-PU-simple-label-shift",
         ],
         required=False,
     )
@@ -121,7 +122,22 @@ if __name__ == "__main__":
     parser.add_argument("-cc", "--case_control", action="store_true")
     parser.add_argument("-n", "--num_experiments", type=int, default=1, required=False)
     parser.add_argument(
-        "-ls", "--label_shift_pi", type=float, nargs="+", required=False
+        "-lsp", "--label_shift_pi", type=float, nargs="+", required=False
+    )
+    parser.add_argument(
+        "-lsm",
+        "--label_shift_method",
+        type=str,
+        nargs="+",
+        required=False,
+        choices=[
+            "None",
+            "Augmented label shift",
+            "Cutoff label shift",
+            "Odds ratio label shift",
+            "EM label shift",
+            "Simple label shift",
+        ],
     )
     parser.add_argument("--f", type=str, required=False)
     args = parser.parse_args()
@@ -143,6 +159,8 @@ if __name__ == "__main__":
         num_experiments = args.num_experiments
     if args.label_shift_pi is not None:
         label_shift_pis = args.label_shift_pi
+    if args.label_shift_method is not None:
+        label_shift_methods = args.label_shift_method
 
     print("Device:", "cuda" if torch.cuda.is_available() else "cpu")
 
@@ -152,6 +170,7 @@ sem = threading.Semaphore(n_threads)
 threads = []
 
 config["label_shift_pis"] = label_shift_pis
+config["label_shift_methods"] = label_shift_methods
 
 for dataset in datasets:
     config["data"] = dataset
@@ -286,11 +305,6 @@ for dataset in datasets:
                         model_config=config,
                         pretrain=True,
                         case_control=case_control,
-                        augmented_label_shift="augmented-label-shift"
-                        in config["training_mode"],
-                        em_label_shift="EM-label-shift" in config["training_mode"],
-                        simple_label_shift="simple-label-shift"
-                        in config["training_mode"],
                     )
                     trainer.train(vae_pu_data)
                 else:

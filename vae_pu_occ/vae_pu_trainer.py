@@ -37,9 +37,6 @@ class VaePuTrainer:
         balanced_savage=False,
         unbalanced_savage=False,
         case_control=False,
-        augmented_label_shift=False,
-        em_label_shift=False,
-        simple_label_shift=False,
     ):
         self.num_exp = num_exp
         self.config = model_config
@@ -53,9 +50,6 @@ class VaePuTrainer:
         self.balanced_savage = balanced_savage
         self.unbalanced_savage = unbalanced_savage
         self.case_control = case_control
-        self.augmented_label_shift = augmented_label_shift
-        self.em_label_shift = em_label_shift
-        self.simple_label_shift = simple_label_shift
 
         self.model_type = "VAE-PU"
         if self.case_control:
@@ -71,12 +65,6 @@ class VaePuTrainer:
             self.model_type += "-unbalanced-savage"
         elif self.balanced_savage:
             self.model_type += "-balanced-savage"
-        elif self.augmented_label_shift:
-            self.model_type += "-augmented-label-shift"
-        elif self.em_label_shift:
-            self.model_type += "-EM-label-shift"
-        elif self.simple_label_shift:
-            self.model_type += "-simple-label-shift"
 
     def train(self, vae_pu_data):
         self._prepare_dataloaders(vae_pu_data)
@@ -189,32 +177,24 @@ class VaePuTrainer:
                 time.perf_counter() - self.baseline_training_start
             )
 
-            if self.augmented_label_shift:
-                no_ls_s_model = self.train_no_ls_s_model()
+        if "Augmented label shift" in self.config["label_shift_methods"]:
+            self.no_ls_s_model = self.train_no_ls_s_model()
 
-            for label_shift_pi in self.config["label_shift_pis"]:
-                ls_dataset = self._get_label_shifted_test_dataset(label_shift_pi)
-                ls_DL = DataLoader(
-                    ls_dataset,
-                    batch_size=self.config["batch_size_test"],
+        for label_shift_pi in self.config["label_shift_pis"]:
+            for label_shift_method in self.config["label_shift_methods"]:
+                print(
+                    f"--- Label shift method: {label_shift_method}, pi shift: {label_shift_pi:.2f} ---"
                 )
-
-                if self.augmented_label_shift:
-                    ls_s_model = self.train_ls_s_model(ls_dataset)
-                elif self.em_label_shift:
-                    self.fit_label_shift_EM(DL=ls_DL)
-                elif self.simple_label_shift:
-                    self.fit_label_shift_simple(DL=ls_DL)
 
                 metric_values = self._calculate_ls_metrics(
-                    DL=ls_DL,
-                    ls_s_model=ls_s_model if self.augmented_label_shift else None,
-                    no_ls_s_model=no_ls_s_model if self.augmented_label_shift else None,
                     method=self.model_type,
+                    label_shift_method=label_shift_method,
+                    label_shift_pi=label_shift_pi,
                     time=self.baseline_training_time,
-                    ls_pi=label_shift_pi,
                 )
-                self._save_final_vae_pu_metric_values(metric_values, label_shift_pi)
+                self._save_final_vae_pu_metric_values(
+                    metric_values, label_shift_method, label_shift_pi
+                )
         return self.model
 
     def train_ls_s_model(self, ls_dataset):
@@ -292,45 +272,76 @@ class VaePuTrainer:
             y_proba, pi_shift, pi
         )
 
-    def _calculate_ls_metrics(self, DL, ls_s_model, no_ls_s_model, method, time, ls_pi):
+    def _calculate_ls_metrics(self, method, label_shift_method, label_shift_pi, time):
+        ls_dataset = self._get_label_shifted_test_dataset(label_shift_pi)
+        ls_DL = DataLoader(
+            ls_dataset,
+            batch_size=self.config["batch_size_test"],
+        )
+
+        augmented_label_shift = "Augmented" in label_shift_method
+        cutoff_label_shift = "Cutoff" in label_shift_method
+        odds_ratio_label_shift = "Odds ratio" in label_shift_method
+        em_label_shift = "EM" in label_shift_method
+        simple_label_shift = "Simple" in label_shift_method
+
         y_probas = []
         y_trues = []
+        s_trues = []
         ls_s_probas = []
         no_ls_s_probas = []
 
-        for x, y, s in DL:
+        ls_s_model = None
+        if augmented_label_shift or cutoff_label_shift:
+            ls_s_model = self.train_ls_s_model(ls_dataset)
+        if em_label_shift:
+            self.fit_label_shift_EM(DL=ls_DL)
+        if simple_label_shift or cutoff_label_shift or odds_ratio_label_shift:
+            self.fit_label_shift_simple(DL=ls_DL)
+
+        for x, y, s in ls_DL:
             y_proba = self.model.model_pn.classify(x, sigmoid=True).reshape(-1)
             y_probas.append(y_proba)
             y_trues.append(y)
+            s_trues.append(s)
 
             if ls_s_model is not None:
                 ls_s_proba = ls_s_model.classify(x, sigmoid=True).reshape(-1)
                 ls_s_probas.append(ls_s_proba)
-            if no_ls_s_model is not None:
-                no_ls_s_proba = no_ls_s_model.classify(x, sigmoid=True).reshape(-1)
+            if self.no_ls_s_model is not None:
+                no_ls_s_proba = self.no_ls_s_model.classify(x, sigmoid=True).reshape(-1)
                 no_ls_s_probas.append(no_ls_s_proba)
 
         y_proba = torch.cat(y_probas).detach().cpu().numpy()
         y_true = torch.cat(y_trues).detach().cpu().numpy()
+        s_true = torch.cat(s_trues).detach().cpu().numpy()
         if ls_s_model is not None:
             ls_s_proba = torch.cat(ls_s_probas).detach().cpu().numpy()
-        if no_ls_s_model is not None:
+        if self.no_ls_s_model is not None:
             no_ls_s_proba = torch.cat(no_ls_s_probas).detach().cpu().numpy()
 
         metric_values = calculate_metrics(
             y_proba,
             y_true,
+            s_true,
             ls_s_proba if ls_s_model is not None else None,
-            no_ls_s_proba if no_ls_s_model is not None else None,
+            no_ls_s_proba if self.no_ls_s_model is not None else None,
             method=method,
             time=time,
-            ls_pi=ls_pi,
-            augmented_label_shift=self.augmented_label_shift,
-            em_label_shift=self.em_label_shift,
+            ls_method=label_shift_method,
+            ls_pi=label_shift_pi,
+            augmented_label_shift=augmented_label_shift,
+            cutoff_label_shift=cutoff_label_shift,
+            odds_ratio_label_shift=odds_ratio_label_shift,
+            pi_true=self.config["pi_pl"],
+            pi_estimation=(
+                self.pi_shift_simple if hasattr(self, "pi_shift_simple") else None
+            ),
+            em_label_shift=em_label_shift,
             em_label_shift_proba_function=self.get_label_shift_proba_function(
                 self.pi_shift_EM if hasattr(self, "pi_shift_EM") else None
             ),
-            simple_label_shift=self.simple_label_shift,
+            simple_label_shift=simple_label_shift,
             simple_label_shift_proba_function=self.get_label_shift_proba_function(
                 self.pi_shift_simple if hasattr(self, "pi_shift_simple") else None
             ),
@@ -365,10 +376,12 @@ class VaePuTrainer:
         self.timesAutoencoder = []
         self.timesTargetClassifier = []
 
-    def _save_final_vae_pu_metric_values(self, metric_values, label_shift_pi):
+    def _save_final_vae_pu_metric_values(
+        self, metric_values, label_shift_method, label_shift_pi
+    ):
         metrics_path = os.path.join(
             self.config["directory"],
-            f"metric_values_{self.model_type}_ls-{label_shift_pi:.2f}.json",
+            f"metric_values_{self.model_type}_ls-{label_shift_method}-{label_shift_pi:.2f}.json",
         )
         if self.use_original_paper_code:
             metrics_path = os.path.join(
@@ -808,13 +821,13 @@ class VaePuTrainer:
         elif os.path.exists(
             os.path.join(
                 self.config["directory"],
-                f"metric_values_{self.model_type}_ls-0.50.json",
+                f"metric_values_{self.model_type}_ls-None-0.50.json",
             )
         ):
             with open(
                 os.path.join(
                     self.config["directory"],
-                    f"metric_values_{self.model_type}_ls-0.50.json",
+                    f"metric_values_{self.model_type}_ls-None-0.50.json",
                 ),
                 "r",
             ) as f:

@@ -42,9 +42,6 @@ class VaePuOccTrainer(VaePuTrainer):
         balanced_savage=False,
         unbalanced_savage=False,
         case_control=False,
-        augmented_label_shift=False,
-        em_label_shift=False,
-        simple_label_shift=False,
     ):
         super(VaePuOccTrainer, self).__init__(
             num_exp,
@@ -56,9 +53,6 @@ class VaePuOccTrainer(VaePuTrainer):
             balanced_savage,
             unbalanced_savage,
             case_control,
-            augmented_label_shift,
-            em_label_shift,
-            simple_label_shift,
         )
 
     def train(self, vae_pu_data):
@@ -635,45 +629,41 @@ class VaePuOccTrainer(VaePuTrainer):
             os.path.join(self.config["directory"], "occ", occ_method), exist_ok=True
         )
 
-        if self.augmented_label_shift:
-            no_ls_s_model = self.train_no_ls_s_model()
+        if (
+            "Augmented label shift" in self.config["label_shift_methods"]
+            and not hasattr(self, "no_ls_s_model")
+            and self.no_ls_s_model is None
+        ):
+            self.no_ls_s_model = self.train_no_ls_s_model()
 
         for label_shift_pi in self.config["label_shift_pis"]:
-            ls_dataset = self._get_label_shifted_test_dataset(label_shift_pi)
-            ls_DL = DataLoader(
-                ls_dataset,
-                batch_size=self.config["batch_size_test"],
-            )
-
-            if self.augmented_label_shift:
-                ls_s_model = self.train_ls_s_model(ls_dataset)
-            elif self.em_label_shift:
-                self.fit_label_shift_EM(DL=ls_DL)
-
-            metric_values = self._calculate_ls_metrics(
-                DL=ls_DL,
-                ls_s_model=ls_s_model if self.augmented_label_shift else None,
-                no_ls_s_model=no_ls_s_model if self.augmented_label_shift else None,
-                method=f"{self.model_type}+{occ_method}",
-                time=self.occ_training_time,
-                ls_pi=label_shift_pi,
-            )
-
-            if self.baseline_training_time is not None:
-                metric_values["Time"] = (
-                    self.baseline_training_time + self.occ_training_time
+            for label_shift_method in self.config["label_shift_methods"]:
+                print(
+                    f"--- Label shift method: {label_shift_method}, pi shift: {label_shift_pi:.2f} ---"
                 )
 
-            with open(
-                os.path.join(
-                    self.config["directory"],
-                    "occ",
-                    occ_method,
-                    f"metric_values_{self.model_type}+{occ_method}_ls-{label_shift_pi:.2f}.json",
-                ),
-                "w",
-            ) as f:
-                json.dump(metric_values, f)
+                metric_values = self._calculate_ls_metrics(
+                    method=f"{self.model_type}+{occ_method}",
+                    label_shift_method=label_shift_method,
+                    label_shift_pi=label_shift_pi,
+                    time=self.occ_training_time,
+                )
+
+                if self.baseline_training_time is not None:
+                    metric_values["Time"] = (
+                        self.baseline_training_time + self.occ_training_time
+                    )
+
+                with open(
+                    os.path.join(
+                        self.config["directory"],
+                        "occ",
+                        occ_method,
+                        f"metric_values_{self.model_type}+{occ_method}_ls-{label_shift_method}-{label_shift_pi:.2f}.json",
+                    ),
+                    "w",
+                ) as f:
+                    json.dump(metric_values, f)
         return self.model
 
     def _save_results(self):

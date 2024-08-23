@@ -10,7 +10,7 @@ import seaborn as sns
 
 pd.set_option("display.max_rows", 500)
 
-root = "result-clean"
+root = "result"
 results = []
 
 for dataset in os.listdir(root):
@@ -103,19 +103,6 @@ results_df = pd.DataFrame.from_records(results)
 results_df = results_df[~results_df.Method.str.contains("SRuleOnly")]
 
 results_df["BaseMethod"] = "VAE-PU"
-results_df["LabelShiftMethod"] = np.where(
-    results_df.Method.str.contains("augmented-label-shift"),
-    "Augmented",
-    np.where(
-        results_df.Method.str.contains("EM-label-shift"),
-        "EM",
-        np.where(
-            results_df.Method.str.contains("simple-label-shift"),
-            "Simple",
-            "None",
-        ),
-    ),
-)
 results_df["OCC"] = np.where(
     results_df.Method.str.contains("A\^3"),
     "A^3",
@@ -159,11 +146,22 @@ results_df
 # %%
 os.makedirs("label_shift_metrics", exist_ok=True)
 
-for metric in ["Accuracy", "Precision", "Recall", "F1 score", "Balanced accuracy"]:
+for metric in [
+    "Accuracy",
+    "Precision",
+    "Recall",
+    "F1 score",
+    "Balanced accuracy",
+    "U-Accuracy",
+    "U-Precision",
+    "U-Recall",
+    "U-F1 score",
+    "U-Balanced accuracy",
+]:
     pivot = results_df.pivot_table(
         values=metric,
         index=["c", "Dataset", "Label shift \\pi"],
-        columns=["BaseMethod", "LabelShiftMethod", "OCC"],
+        columns=["BaseMethod", "Label shift method", "OCC"],
     )
     pivot
     # results_df.pivot_table(values='Balanced accuracy', index=['c', "Dataset"], columns=["BaseMethod", "Balancing", "OCC"])
