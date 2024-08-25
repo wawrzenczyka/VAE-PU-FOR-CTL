@@ -75,8 +75,10 @@ def calculate_metrics(
         "U-F1 score": u_f1,
         "U-AUC": u_auc,
         "U-Balanced accuracy": u_balanced_accuracy,
-        "Immediate \\pi estimation": pi_estimation if simple_label_shift else None,
-        "EM \\pi estimation": pi_estimation_em if em_label_shift else None,
+        "Immediate \\pi estimation": (
+            float(pi_estimation) if simple_label_shift else None
+        ),
+        "EM \\pi estimation": float(pi_estimation_em) if em_label_shift else None,
         "Time": time,
     }
     return metric_values
