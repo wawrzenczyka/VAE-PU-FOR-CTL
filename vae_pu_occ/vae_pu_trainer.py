@@ -248,7 +248,7 @@ class VaePuTrainer:
         y_proba = torch.cat(y_probas).detach().cpu().numpy()
 
         pi_shift = 0.5
-        pi = self.config["pi_pl"]
+        pi = self.config["pi_p"]
 
         tol = 1e-5
         while True:
@@ -363,7 +363,7 @@ class VaePuTrainer:
         s_prior_shift = np.mean(s_shift == 1)
         s_prior = len(self.x_pl_full) / (len(self.x_pl_full) + len(self.x_u_full))
 
-        pi = self.config["pi_pl"]
+        pi = self.config["pi_p"]
         pi_shift = (s_prior_shift / s_prior) * pi
         self.pi_shift_simple = pi_shift
 
