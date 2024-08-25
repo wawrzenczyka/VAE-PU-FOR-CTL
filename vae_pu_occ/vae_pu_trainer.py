@@ -337,6 +337,9 @@ class VaePuTrainer:
             pi_estimation=(
                 self.pi_shift_simple if hasattr(self, "pi_shift_simple") else None
             ),
+            pi_estimation_em=(
+                self.pi_shift_EM if hasattr(self, "pi_shift_EM") else None
+            ),
             em_label_shift=em_label_shift,
             em_label_shift_proba_function=self.get_label_shift_proba_function(
                 self.pi_shift_EM if hasattr(self, "pi_shift_EM") else None

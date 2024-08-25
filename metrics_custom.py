@@ -17,6 +17,7 @@ def calculate_metrics(
     odds_ratio_label_shift=False,
     pi_true=None,
     pi_estimation=None,
+    pi_estimation_em=None,
     em_label_shift=False,
     em_label_shift_proba_function=None,
     simple_label_shift=False,
@@ -74,6 +75,8 @@ def calculate_metrics(
         "U-F1 score": u_f1,
         "U-AUC": u_auc,
         "U-Balanced accuracy": u_balanced_accuracy,
+        "Immediate \\pi estimation": pi_estimation if simple_label_shift else None,
+        "EM \\pi estimation": pi_estimation_em if em_label_shift else None,
         "Time": time,
     }
     return metric_values
