@@ -886,7 +886,7 @@ class VaePuTrainer:
         pi = torch.sum(y == 1) / len(y)
         if pi < label_shift_pi:
             n_pos = torch.sum(y == 1).item()
-            n_neg = int(n_pos * (1 - pi) / pi)
+            n_neg = int(n_pos * (1 - label_shift_pi) / label_shift_pi)
 
             sampled_neg_idx = torch.ones(len(y_neg)).multinomial(
                 num_samples=n_neg, replacement=True
@@ -899,7 +899,7 @@ class VaePuTrainer:
             )
         elif pi > label_shift_pi:
             n_neg = torch.sum(y != 1)
-            n_pos = int(n_neg * pi / (1 - pi))
+            n_pos = int(n_neg * label_shift_pi / (1 - label_shift_pi))
 
             sampled_pos_idx = torch.ones(len(y_pos)).multinomial(
                 num_samples=n_pos, replacement=True
