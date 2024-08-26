@@ -315,6 +315,7 @@ class VaePuTrainer:
         y_proba = torch.cat(y_probas).detach().cpu().numpy()
         y_true = torch.cat(y_trues).detach().cpu().numpy()
         s_true = torch.cat(s_trues).detach().cpu().numpy()
+        pi_shift_true = np.mean(y_true == 1)
         if ls_s_model is not None:
             ls_s_proba = torch.cat(ls_s_probas).detach().cpu().numpy()
         if self.no_ls_s_model is not None:
@@ -333,11 +334,12 @@ class VaePuTrainer:
             augmented_label_shift=augmented_label_shift,
             cutoff_label_shift=cutoff_label_shift,
             odds_ratio_label_shift=odds_ratio_label_shift,
-            pi_true=self.config["pi_pl"],
-            pi_estimation=(
+            pi_train_true=self.config["pi_pl"],
+            pi_shift_true=pi_shift_true,
+            pi_shift_estimation_simple=(
                 self.pi_shift_simple if hasattr(self, "pi_shift_simple") else None
             ),
-            pi_estimation_em=(
+            pi_shift_estimation_em=(
                 self.pi_shift_EM if hasattr(self, "pi_shift_EM") else None
             ),
             em_label_shift=em_label_shift,
