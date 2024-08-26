@@ -8,9 +8,6 @@ datasets=(
 )
 training_modes=(
     "VAE-PU"
-    "VAE-PU-augmented-label-shift"
-    "VAE-PU-EM-label-shift"
-    "VAE-PU-simple-label-shift"
 )
 label_frequencies=(
     0.3
@@ -22,6 +19,15 @@ label_frequencies=(
 )
 start_idxs=(
     0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
 )
 
 for dataset in "${datasets[@]}"; do
