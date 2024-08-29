@@ -6,6 +6,7 @@ import time
 import matplotlib.pyplot as plt
 import numpy as np
 import pkbar
+import tensorflow as tf
 import torch
 from torch.nn import BCEWithLogitsLoss
 from torch.optim import Adam
@@ -182,6 +183,10 @@ class VaePuTrainer:
 
         for label_shift_pi in self.config["label_shift_pis"]:
             for label_shift_method in self.config["label_shift_methods"]:
+                np.random.seed(self.num_exp)
+                torch.manual_seed(self.num_exp)
+                tf.random.set_seed(self.num_exp)
+
                 print(
                     f"--- Label shift method: {label_shift_method}, pi shift: {label_shift_pi:.2f} ---"
                 )
