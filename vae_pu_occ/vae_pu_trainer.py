@@ -211,11 +211,13 @@ class VaePuTrainer:
             ls_train_dataset,
             batch_size=128,
             shuffle=True,
+            drop_last=True,
         ), DataLoader(
             ls_val_dataset,
             batch_size=128,
         )
         ls_s_model = self._train_custom_s_classifier(ls_train_DL, ls_val_DL)
+        ls_s_model.eval()
         return ls_s_model
 
     def train_no_ls_s_model(self):
@@ -235,12 +237,14 @@ class VaePuTrainer:
             ),
             batch_size=128,
             shuffle=True,
+            drop_last=True,
         )
         DL_val = DataLoader(
             TensorDataset(self.x_val, self.y_val, self.s_val),
             batch_size=128,
         )
         self.no_shift_s_model = self._train_custom_s_classifier(DL_train, DL_val)
+        self.no_shift_s_model.eval()
         return self.no_shift_s_model
 
     def fit_label_shift_EM(self, DL):
