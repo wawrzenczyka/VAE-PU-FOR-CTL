@@ -10,7 +10,7 @@ import seaborn as sns
 
 pd.set_option("display.max_rows", 500)
 
-root = "result"
+root = "result-clean"
 results = []
 
 for dataset in os.listdir(root):
@@ -100,7 +100,7 @@ for dataset in os.listdir(root):
 
 results_df = pd.DataFrame.from_records(results)
 
-results_df = results_df[~results_df.Method.str.contains("SRuleOnly")]
+# results_df = results_df[~results_df.Method.str.contains("SRuleOnly")]
 
 results_df["BaseMethod"] = "VAE-PU"
 results_df["OCC"] = np.where(
@@ -169,6 +169,21 @@ for metric in [
         pivot.eq(pivot.max(axis=1), axis=0), "*", ""
     )
     max_pivot.to_csv(os.path.join("label_shift_metrics", f"{metric}.csv"))
+
+# %%
+immediate_estimation_error = (
+    results_df["Immediate \\pi estimation"] - results_df["True label shift \\pi"]
+).abs()
+immediate_estimation_error = immediate_estimation_error.dropna()
+immediate_error = np.sqrt((immediate_estimation_error**2).mean())
+
+em_estimation_error = (
+    results_df["EM \\pi estimation"] - results_df["True label shift \\pi"]
+).abs()
+em_estimation_error = em_estimation_error.dropna()
+em_error = np.sqrt((em_estimation_error**2).mean())
+
+immediate_error, em_error
 
 # %%
 for dataset, rename in [
