@@ -288,11 +288,12 @@ class VaePuTrainer:
             batch_size=self.config["batch_size_test"],
         )
 
-        augmented_label_shift = "Augmented" in label_shift_method
-        cutoff_label_shift = "Cutoff" in label_shift_method
-        odds_ratio_label_shift = "Odds ratio" in label_shift_method
-        em_label_shift = "EM" in label_shift_method
-        simple_label_shift = "Simple" in label_shift_method
+        augmented_label_shift = "Augmented label shift" in label_shift_method
+        cutoff_label_shift = "Cutoff label shift" in label_shift_method
+        odds_ratio_label_shift = "Odds ratio label shift" in label_shift_method
+        em_label_shift = "EM label shift" in label_shift_method
+        simple_label_shift = "Simple label shift" in label_shift_method
+        non_ls_augmented = "Non-LS augmented" in label_shift_method
 
         y_probas = []
         y_trues = []
@@ -343,6 +344,7 @@ class VaePuTrainer:
             augmented_label_shift=augmented_label_shift,
             cutoff_label_shift=cutoff_label_shift,
             odds_ratio_label_shift=odds_ratio_label_shift,
+            non_ls_augmented=non_ls_augmented,
             pi_train_true=self.config["pi_pl"],
             pi_shift_true=pi_shift_true,
             pi_shift_estimation_simple=(

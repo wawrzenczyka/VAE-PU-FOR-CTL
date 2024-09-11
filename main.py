@@ -46,6 +46,7 @@ label_shift_methods = [
     "Odds ratio label shift",
     "EM label shift",
     "Simple label shift",
+    "Non-LS augmented",
 ]
 
 case_control = False
@@ -144,6 +145,7 @@ if __name__ == "__main__":
             "Odds ratio label shift",
             "EM label shift",
             "Simple label shift",
+            "Non-LS augmented",
         ],
     )
     parser.add_argument("--f", type=str, required=False)
