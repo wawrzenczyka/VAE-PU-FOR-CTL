@@ -302,7 +302,7 @@ class VaePuTrainer:
         no_ls_s_probas = []
 
         ls_s_model = None
-        if augmented_label_shift or cutoff_label_shift:
+        if augmented_label_shift or cutoff_label_shift or non_ls_augmented:
             ls_s_model = self.train_ls_s_model(ls_dataset)
         if em_label_shift:
             self.fit_label_shift_EM(DL=ls_DL)
