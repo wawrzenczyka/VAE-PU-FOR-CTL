@@ -5,6 +5,13 @@ datasets=(
     "CIFAR MachineAnimal"
     "STL MachineAnimal"
     "CDC-Diabetes"
+    "Synthetic SCAR"
+    "MNIST 3v5 SCAR"
+    "MNIST OvE SCAR"
+    "CIFAR CarTruck SCAR"
+    "CIFAR MachineAnimal SCAR"
+    "STL MachineAnimal SCAR"
+    "CDC-Diabetes SCAR"
 )
 training_modes=(
     "VAE-PU"

@@ -4,6 +4,7 @@ import os
 import numba as nb
 import numpy as np
 import pandas as pd
+import scipy.stats
 import torch
 from torchvision.datasets import CIFAR10, MNIST, STL10
 from ucimlrepo import fetch_ucirepo
@@ -535,23 +536,26 @@ def get_dataset(
         y = y.to_numpy()
         y = np.where(y.reshape(-1) == 1, 1, -1)
 
-        age_score = 25 * (labeling_variables["Age"] + 1) ** 2  # 1 to 100
-        edu_score = 100 * labeling_variables["Education"]
-        labeling_score = age_score + edu_score
+        if use_scar_labeling:
+            o = get_scar_labels(y, label_frequency)
+        else:
+            age_score = 25 * (labeling_variables["Age"] + 1) ** 2  # 1 to 100
+            edu_score = 100 * labeling_variables["Education"]
+            labeling_score = age_score + edu_score
 
-        positive_indices = np.where(y == 1)[0]
-        positive_labeling_scores = labeling_score[positive_indices]
-        positive_labeling_probas = positive_labeling_scores / np.sum(
-            positive_labeling_scores
-        )
+            positive_indices = np.where(y == 1)[0]
+            positive_labeling_scores = labeling_score[positive_indices]
+            positive_labeling_probas = positive_labeling_scores / np.sum(
+                positive_labeling_scores
+            )
 
-        labeled_indices = np.random.choice(
-            positive_indices,
-            size=int(label_frequency * len(positive_indices)),
-            replace=False,
-            p=positive_labeling_probas,
-        )
-        o = np.where(np.isin(range(len(y)), labeled_indices), 1, 0)
+            labeled_indices = np.random.choice(
+                positive_indices,
+                size=int(label_frequency * len(positive_indices)),
+                replace=False,
+                p=positive_labeling_probas,
+            )
+            o = np.where(np.isin(range(len(y)), labeled_indices), 1, 0)
 
         negative_indices = np.where(y == -1)[0]
         idx = np.concatenate(
@@ -571,6 +575,37 @@ def get_dataset(
         X = torch.from_numpy(X)
         y = torch.from_numpy(y)
         o = torch.from_numpy(o)
+        dataset_data = split_datasets(
+            X, y, o, label_frequency, val_size, test_size, case_control=case_control
+        )
+    elif "Synthetic" in name:
+        pi = 0.5
+        n = 10_000
+        m = 20
+        k = 10
+
+        n_pos = int(n * pi)
+        n_neg = n - n_pos
+
+        center_pos = np.concatenate([np.ones(k), np.zeros(m - k)])
+        center_neg = np.zeros(m)
+        scale = np.eye(m)
+
+        X_pos = scipy.stats.norm.rvs(size=(n_pos, m), loc=center_pos)
+        X_neg = scipy.stats.norm.rvs(size=(n_neg, m), loc=center_neg)
+
+        X = np.concatenate([X_pos, X_neg])
+        y = np.concatenate([np.ones(n_pos), np.zeros(n_neg)])
+
+        if use_scar_labeling:
+            o = get_scar_labels(y, label_frequency)
+        else:
+            raise Error("Synthetic dataset is SCAR only")
+
+        X = torch.from_numpy(X)
+        y = torch.from_numpy(y)
+        o = torch.from_numpy(o)
+
         dataset_data = split_datasets(
             X, y, o, label_frequency, val_size, test_size, case_control=case_control
         )
