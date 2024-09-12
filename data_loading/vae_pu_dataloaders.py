@@ -600,7 +600,7 @@ def get_dataset(
         if use_scar_labeling:
             o = get_scar_labels(y, label_frequency)
         else:
-            raise Error("Synthetic dataset is SCAR only")
+            raise Exception("Synthetic dataset is SCAR only")
 
         X = torch.from_numpy(X)
         y = torch.from_numpy(y)

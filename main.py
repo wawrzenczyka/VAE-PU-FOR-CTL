@@ -52,11 +52,6 @@ label_shift_methods = [
 case_control = False
 synthetic_labels = False
 
-if "SCAR" in config["data"]:
-    config["use_SCAR"] = True
-else:
-    config["use_SCAR"] = False
-
 config["occ_methods"] = [
     # "IsolationForest",
     # "A^3",
@@ -183,6 +178,11 @@ config["label_shift_methods"] = label_shift_methods
 
 for dataset in datasets:
     config["data"] = dataset
+
+    if "SCAR" in config["data"]:
+        config["use_SCAR"] = True
+    else:
+        config["use_SCAR"] = False
 
     for training_mode in training_modes:
         config["training_mode"] = training_mode
