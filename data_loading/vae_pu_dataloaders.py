@@ -532,12 +532,11 @@ def get_dataset(
             one_hot.fit_transform(X.loc[:, one_hot_cols]).toarray()
         )
         X = pd.concat([X.drop(columns=one_hot_cols), X_one_hot], axis=1)
-        X = X.to_numpy()
-        y = y.to_numpy()
-        y = np.where(y.reshape(-1) == 1, 1, -1)
+        y = torch.where(y.reshape(-1) == 1, 1, -1)
 
         if use_scar_labeling:
-            o = get_scar_labels(y, label_frequency)
+            o = get_scar_labels(torch.from_numpy(y), label_frequency)
+            o = o.numpy()
         else:
             age_score = 25 * (labeling_variables["Age"] + 1) ** 2  # 1 to 100
             edu_score = 100 * labeling_variables["Education"]
@@ -598,7 +597,8 @@ def get_dataset(
         y = np.concatenate([np.ones(n_pos), np.zeros(n_neg)])
 
         if use_scar_labeling:
-            o = get_scar_labels(y, label_frequency)
+            o = get_scar_labels(torch.from_numpy(y), label_frequency)
+            o = o.numpy()
         else:
             raise Exception("Synthetic dataset is SCAR only")
 
