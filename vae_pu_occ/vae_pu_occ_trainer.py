@@ -730,8 +730,8 @@ class VaePuOccTrainer(VaePuTrainer):
         )
         log2.close()
 
-        if self.config["train_occ"]:
-            torch.save(
-                self.model,
-                os.path.join(self.config["directory"], f"model_{self.model_type}.pt"),
-            )
+        # if self.config["train_occ"]:
+        #     torch.save(
+        #         self.model,
+        #         os.path.join(self.config["directory"], f"model_{self.model_type}.pt"),
+        #     )
