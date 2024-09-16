@@ -673,11 +673,6 @@ class VaePuOccTrainer(VaePuTrainer):
                 np.mean(np.array(self.timesTargetClassifier[1:])),
             )
 
-        np.savez(
-            os.path.join(self.config["directory"], "PU_loss_val_VAEPU"),
-            loss=self.valLosses,
-        )
-
     def _save_final_metrics(self):
         acc, precision, recall, f1_score, auc, b_acc = self.model.accuracy(
             self.DL_test,
