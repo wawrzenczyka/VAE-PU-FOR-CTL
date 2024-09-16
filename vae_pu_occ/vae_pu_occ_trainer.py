@@ -673,20 +673,6 @@ class VaePuOccTrainer(VaePuTrainer):
                 np.mean(np.array(self.timesTargetClassifier[1:])),
             )
 
-        self._plotLoss(
-            self.elbos, os.path.join(self.config["directory"], "loss_vae.png")
-        )
-        self._plotLoss(
-            self.advGenerationLosses,
-            os.path.join(self.config["directory"], "loss_disc.png"),
-        )
-        self._plotLoss(
-            self.discLosses, os.path.join(self.config["directory"], "loss_gen.png")
-        )
-        self._plotLoss(
-            self.labelLosses, os.path.join(self.config["directory"], "loss_cl.png")
-        )
-
         np.savez(
             os.path.join(self.config["directory"], "PU_loss_val_VAEPU"),
             loss=self.valLosses,

@@ -419,15 +419,6 @@ class VaePuTrainer:
                     f,
                 )
 
-            self._plotLoss(
-                self.targetClassifierLosses,
-                os.path.join(self.config["directory"], "loss_PN.png"),
-            )
-            self._plotLoss(
-                self.valAccuracies,
-                os.path.join(self.config["directory"], "val_accuracy.png"),
-            )
-
             model_file = f"model_pre_occ_{self.model_type}.pt"
             torch.save(self.model, os.path.join(self.config["directory"], model_file))
 
@@ -671,14 +662,6 @@ class VaePuTrainer:
             if self.config["bool_pn_pre"]:
                 print(f"[PRE-TRAIN] PN Loss: {sum(lst_2) / len(lst_2)}")
 
-        self._plotLoss(
-            self.preLoss1, os.path.join(self.config["directory"], "loss_pretrain.png")
-        )
-        if self.config["bool_pn_pre"]:
-            self._plotLoss(
-                self.preLoss2,
-                os.path.join(self.config["directory"], "loss_pretrain_pn.png"),
-            )
         print("PRE-TRAIN finish!")
 
     def _prepare_dataloaders(self, vae_pu_data):
@@ -827,13 +810,6 @@ class VaePuTrainer:
             )
         )
         return model
-
-    def _plotLoss(self, lst, fname):
-        plt.figure(figsize=(10, 5))
-        plt.plot(range(1, len(lst) + 1), lst)
-
-        plt.savefig(fname)
-        plt.close()
 
     def _get_label_shifted_test_dataset(self, label_shift_pi):
         X, y, s = self.x_test, self.y_test, self.s_test
