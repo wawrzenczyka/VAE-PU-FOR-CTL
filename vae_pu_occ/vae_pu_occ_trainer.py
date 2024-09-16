@@ -693,7 +693,6 @@ class VaePuOccTrainer(VaePuTrainer):
         )
 
     def _save_final_metrics(self):
-        log2 = open(os.path.join(self.config["directory"], "log_PN.txt"), "a")
         acc, precision, recall, f1_score, auc, b_acc = self.model.accuracy(
             self.DL_test,
             balanced_cutoff=self.balanced_cutoff,
@@ -701,15 +700,6 @@ class VaePuOccTrainer(VaePuTrainer):
         )
 
         if self.config["train_occ"] and hasattr(self, "acc_pre_occ"):
-            log2.write(
-                "final test pre-occ: acc: {0:.4f}, precision: {1:.4f}, recall: {2:.4f}, f1-score: {3:.4f}".format(
-                    self.acc_pre_occ,
-                    self.precision_pre_occ,
-                    self.recall_pre_occ,
-                    self.f1_pre_occ,
-                )
-                + "\n"
-            )
             print(
                 "final test pre-occ: acc: {0:.4f}, precision: {1:.4f}, recall: {2:.4f}, f1-score: {3:.4f}".format(
                     self.acc_pre_occ,
@@ -718,17 +708,12 @@ class VaePuOccTrainer(VaePuTrainer):
                     self.f1_pre_occ,
                 )
             )
-        log2.write(
-            "final test : acc: {0:.4f}, precision: {1:.4f}, recall: {2:.4f}, f1-score: {3:.4f}".format(
-                acc, precision, recall, f1_score
-            )
-        )
+
         print(
             "final test : acc: {0:.4f}, precision: {1:.4f}, recall: {2:.4f}, f1-score: {3:.4f}".format(
                 acc, precision, recall, f1_score
             )
         )
-        log2.close()
 
         # if self.config["train_occ"]:
         #     torch.save(

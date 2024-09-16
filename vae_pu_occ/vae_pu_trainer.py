@@ -85,6 +85,7 @@ class VaePuTrainer:
             self.model = self._load_trained_vae_pu()
         else:
             self.baseline_training_start = time.perf_counter()
+            os.makedirs(self.config["directory"], exist_ok=True)
             self._prepare_log_files()
 
             if self.pretrain:
@@ -94,14 +95,6 @@ class VaePuTrainer:
 
             self.model_post_vae_training = None
             for epoch in range(self.config["num_epoch"]):
-                if not self.use_original_paper_code:
-                    self.log = open(
-                        os.path.join(self.config["directory"], "log.txt"), "a"
-                    )
-                    self.log2 = open(
-                        os.path.join(self.config["directory"], "log_PN.txt"), "a"
-                    )
-
                 start_time = time.time()
                 epoch_losses = {
                     "ELBO": [],
@@ -166,10 +159,6 @@ class VaePuTrainer:
                     # finish by training only target classifier
                     self._calculate_target_classifier_metrics(epoch, epoch_losses)
                     self.timesTargetClassifier.append(time.time() - start_time)
-
-                if not self.use_original_paper_code:
-                    self.log.close()
-                    self.log2.close()
 
                 print(
                     f'Exp: {self.num_exp} / c = {self.config["base_label_frequency"]:.2f} / Epoch: {epoch + 1:4} |||| Remaining time (baseline): {(self.config["num_epoch"] - epoch) * (time.time() - start_time):.2f} sec'
@@ -540,9 +529,6 @@ class VaePuTrainer:
 
     def _calculate_target_classifier_metrics(self, epoch, losses):
         targetLoss = np.mean(losses["Target classifier"])
-
-        if not self.use_original_paper_code:
-            self.log2.write("epoch: {}, loss: {}".format(epoch + 1, targetLoss) + "\n")
         print("epoch: {}, loss: {}".format(epoch + 1, targetLoss))
 
         val_acc, val_pr, val_re, val_f1, val_auc, val_b_acc = self.model.accuracy(
@@ -551,13 +537,7 @@ class VaePuTrainer:
             pi_p=self.config["pi_p"],
         )
         self.valAccuracies.append(val_acc)
-        if not self.use_original_paper_code:
-            self.log2.write(
-                "...val: acc: {0:.4f}, precision: {1:.4f}, recall: {2:.4f}, f1: {3:.4f}".format(
-                    val_acc, val_pr, val_re, val_f1
-                )
-                + "\n"
-            )
+
         print(
             "...val: acc: {0:.4f}, precision: {1:.4f}, recall: {2:.4f}, f1: {3:.4f}".format(
                 val_acc, val_pr, val_re, val_f1
@@ -580,13 +560,7 @@ class VaePuTrainer:
             balanced_cutoff=self.balanced_cutoff,
             pi_p=self.config["pi_p"],
         )
-        if not self.use_original_paper_code:
-            self.log.write(
-                "...(VAE) val: acc: {0:.4f}, precision: {1:.4f}, recall: {2:.4f}, f1: {3:.4f}".format(
-                    val_acc, val_pr, val_re, val_f1
-                )
-                + "\n"
-            )
+
         print(
             "...(VAE) val: acc: {0:.4f}, precision: {1:.4f}, recall: {2:.4f}, f1: {3:.4f}".format(
                 val_acc, val_pr, val_re, val_f1
@@ -611,20 +585,8 @@ class VaePuTrainer:
         )
 
     def _check_discriminator_and_classifier(self, epoch, x_pl, x_u):
-        if not self.use_original_paper_code:
-            self.log.write("epoch: {}\n".format(epoch + 1))
         d_x_pu, d_x_u = self.model.check_disc(x_pl, x_u)
         d_x_pu2, d_x_pl2 = self.model.check_pn(x_pl, x_u)
-
-        if not self.use_original_paper_code:
-            self.log.write(
-                "d_x_pu: {}, d_x_u: {}\n".format(torch.mean(d_x_pu), torch.mean(d_x_u))
-            )
-            self.log.write(
-                "d_x_pu2: {}, d_x_pl2: {}\n".format(
-                    torch.mean(d_x_pu2), torch.mean(d_x_pl2)
-                )
-            )
 
     def _train_target_classifier(self, epoch, x_pl, x_u, losses):
         if self.model_post_vae_training is None:
@@ -718,21 +680,6 @@ class VaePuTrainer:
                 os.path.join(self.config["directory"], "loss_pretrain_pn.png"),
             )
         print("PRE-TRAIN finish!")
-
-    def _prepare_log_files(self):
-        os.makedirs(self.config["directory"], exist_ok=True)
-        if not self.use_original_paper_code:
-            self.log = open(os.path.join(self.config["directory"], "log.txt"), "w")
-            self.log.write("config\n")
-            self.log.write(str(self.config))
-            self.log.write("\n")
-            self.log.close()
-
-            self.log2 = open(os.path.join(self.config["directory"], "log_PN.txt"), "w")
-            self.log2.write("config\n")
-            self.log2.write(str(self.config))
-            self.log2.write("\n")
-            self.log2.close()
 
     def _prepare_dataloaders(self, vae_pu_data):
         (
