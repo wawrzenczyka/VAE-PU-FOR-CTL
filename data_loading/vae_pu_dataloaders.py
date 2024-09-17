@@ -532,7 +532,7 @@ def get_dataset(
             one_hot.fit_transform(X.loc[:, one_hot_cols]).toarray()
         )
         X = pd.concat([X.drop(columns=one_hot_cols), X_one_hot], axis=1)
-        y = torch.where(y.reshape(-1) == 1, 1, -1)
+        y = np.where(y.reshape(-1) == 1, 1, -1)
 
         if use_scar_labeling:
             o = get_scar_labels(torch.from_numpy(y), label_frequency)
