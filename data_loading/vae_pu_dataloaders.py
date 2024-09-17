@@ -531,7 +531,7 @@ def get_dataset(
         X_one_hot = pd.DataFrame(
             one_hot.fit_transform(X.loc[:, one_hot_cols]).toarray()
         )
-        X = pd.concat([X.drop(columns=one_hot_cols), X_one_hot], axis=1)
+        X = pd.concat([X.drop(columns=one_hot_cols), X_one_hot], axis=1).to_numpy()
         y = np.where(y.reshape(-1) == 1, 1, -1)
 
         positive_indices = np.where(y == 1)[0]
