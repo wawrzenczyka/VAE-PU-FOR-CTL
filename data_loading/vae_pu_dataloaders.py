@@ -534,6 +534,9 @@ def get_dataset(
         X = pd.concat([X.drop(columns=one_hot_cols), X_one_hot], axis=1)
         y = np.where(y.reshape(-1) == 1, 1, -1)
 
+        positive_indices = np.where(y == 1)[0]
+        negative_indices = np.where(y == -1)[0]
+
         if use_scar_labeling:
             o = get_scar_labels(torch.from_numpy(y), label_frequency)
             o = o.numpy()
@@ -542,7 +545,6 @@ def get_dataset(
             edu_score = 100 * labeling_variables["Education"]
             labeling_score = age_score + edu_score
 
-            positive_indices = np.where(y == 1)[0]
             positive_labeling_scores = labeling_score[positive_indices]
             positive_labeling_probas = positive_labeling_scores / np.sum(
                 positive_labeling_scores
@@ -556,7 +558,6 @@ def get_dataset(
             )
             o = np.where(np.isin(range(len(y)), labeled_indices), 1, 0)
 
-        negative_indices = np.where(y == -1)[0]
         idx = np.concatenate(
             [
                 positive_indices,
