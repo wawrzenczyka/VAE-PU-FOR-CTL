@@ -86,7 +86,6 @@ class VaePuTrainer:
         else:
             self.baseline_training_start = time.perf_counter()
             os.makedirs(self.config["directory"], exist_ok=True)
-            self._prepare_log_files()
 
             if self.pretrain:
                 self._pretrain_autoencoder()
