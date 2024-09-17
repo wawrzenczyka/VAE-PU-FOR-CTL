@@ -509,7 +509,7 @@ def get_dataset(
 
         # data (as pandas dataframes)
         X = cdc_diabetes_health_indicators.data.features.copy(deep=True)
-        y = cdc_diabetes_health_indicators.data.targets
+        y = cdc_diabetes_health_indicators.data.targets.to_numpy()
 
         from sklearn.preprocessing import MinMaxScaler, OneHotEncoder
 
