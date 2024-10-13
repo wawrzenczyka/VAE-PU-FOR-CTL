@@ -14,6 +14,7 @@ def calculate_metrics(
     time=None,
     augmented_label_shift=False,
     cutoff_label_shift=False,
+    cutoff_true_pi_shift=False,
     odds_ratio_label_shift=False,
     non_ls_augmented=False,
     pi_train_true=None,
@@ -37,6 +38,10 @@ def calculate_metrics(
     elif cutoff_label_shift:
         d_B_PU = (y_proba - ls_s_proba) / (1 - y_proba)
         theta = (1 / pi_shift_estimation_simple - 1) / (1 / pi_train_true - 1)
+        y_pred = np.where(d_B_PU > theta, 1, 0)
+    elif cutoff_true_pi_shift:
+        d_B_PU = (y_proba - ls_s_proba) / (1 - y_proba)
+        theta = (1 / pi_shift_true - 1) / (1 / pi_train_true - 1)
         y_pred = np.where(d_B_PU > theta, 1, 0)
     elif non_ls_augmented:
         d_B_PU = (y_proba - ls_s_proba) / (1 - y_proba)

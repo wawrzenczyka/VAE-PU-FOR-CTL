@@ -278,6 +278,7 @@ class VaePuTrainer:
 
         augmented_label_shift = "Augmented label shift" in label_shift_method
         cutoff_label_shift = "Cutoff label shift" in label_shift_method
+        cutoff_true_pi_shift = "Cutoff true pi label shift" in label_shift_method
         odds_ratio_label_shift = "Odds ratio label shift" in label_shift_method
         em_label_shift = "EM label shift" in label_shift_method
         simple_label_shift = "Simple label shift" in label_shift_method
@@ -290,11 +291,21 @@ class VaePuTrainer:
         no_ls_s_probas = []
 
         ls_s_model = None
-        if augmented_label_shift or cutoff_label_shift or non_ls_augmented:
+        if (
+            augmented_label_shift
+            or cutoff_label_shift
+            or cutoff_true_pi_shift
+            or non_ls_augmented
+        ):
             ls_s_model = self.train_ls_s_model(ls_dataset)
         if em_label_shift:
             self.fit_label_shift_EM(DL=ls_DL)
-        if simple_label_shift or cutoff_label_shift or odds_ratio_label_shift:
+        if (
+            simple_label_shift
+            or cutoff_label_shift
+            or cutoff_true_pi_shift
+            or odds_ratio_label_shift
+        ):
             self.fit_label_shift_simple(DL=ls_DL)
 
         for x, y, s in ls_DL:
@@ -331,6 +342,7 @@ class VaePuTrainer:
             ls_pi=label_shift_pi,
             augmented_label_shift=augmented_label_shift,
             cutoff_label_shift=cutoff_label_shift,
+            cutoff_true_pi_shift=cutoff_true_pi_shift,
             odds_ratio_label_shift=odds_ratio_label_shift,
             non_ls_augmented=non_ls_augmented,
             pi_train_true=self.config["pi_pl"],
