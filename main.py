@@ -87,6 +87,11 @@ config["device"] = "auto"
 if __name__ == "__main__":
     from argparse import ArgumentParser
 
+    def none_or_float(value):
+        if value == "None":
+            return None
+        return value
+
     parser = ArgumentParser()
     parser.add_argument(
         "-d",
@@ -126,7 +131,7 @@ if __name__ == "__main__":
     parser.add_argument("-cc", "--case_control", action="store_true")
     parser.add_argument("-n", "--num_experiments", type=int, default=1, required=False)
     parser.add_argument(
-        "-lsp", "--label_shift_pi", type=float, nargs="+", required=False
+        "-lsp", "--label_shift_pi", type=none_or_float, nargs="+", required=False
     )
     parser.add_argument(
         "-lsm",
