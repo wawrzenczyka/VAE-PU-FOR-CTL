@@ -176,7 +176,13 @@ class VaePuTrainer:
                 tf.random.set_seed(self.num_exp)
 
                 print(
-                    f"--- Label shift method: {label_shift_method}, pi shift: {label_shift_pi:.2f} ---"
+                    f"--- Label shift method: {label_shift_method}, pi shift: "
+                    + (
+                        f"{label_shift_pi:.2f}"
+                        if label_shift_pi is not None
+                        else "None"
+                    )
+                    + " ---"
                 )
 
                 metric_values = self._calculate_ls_metrics(
@@ -397,7 +403,9 @@ class VaePuTrainer:
     ):
         metrics_path = os.path.join(
             self.config["directory"],
-            f"metric_values_{self.model_type}_ls-{label_shift_method}-{label_shift_pi:.2f}.json",
+            f"metric_values_{self.model_type}_ls-{label_shift_method}-"
+            + (f"{label_shift_pi:.2f}" if label_shift_pi is not None else "None")
+            + ".json",
         )
         if self.use_original_paper_code:
             metrics_path = os.path.join(

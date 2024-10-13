@@ -639,7 +639,13 @@ class VaePuOccTrainer(VaePuTrainer):
         for label_shift_pi in self.config["label_shift_pis"]:
             for label_shift_method in self.config["label_shift_methods"]:
                 print(
-                    f"--- Label shift method: {label_shift_method}, pi shift: {label_shift_pi:.2f} ---"
+                    f"--- Label shift method: {label_shift_method}, pi shift: "
+                    + (
+                        f"{label_shift_pi:.2f}"
+                        if label_shift_pi is not None
+                        else "None"
+                    )
+                    + " ---"
                 )
 
                 metric_values = self._calculate_ls_metrics(
@@ -659,7 +665,13 @@ class VaePuOccTrainer(VaePuTrainer):
                         self.config["directory"],
                         "occ",
                         occ_method,
-                        f"metric_values_{self.model_type}+{occ_method}_ls-{label_shift_method}-{label_shift_pi:.2f}.json",
+                        f"metric_values_{self.model_type}+{occ_method}_ls-{label_shift_method}-"
+                        + (
+                            f"{label_shift_pi:.2f}"
+                            if label_shift_pi is not None
+                            else "None"
+                        )
+                        + ".json",
                     ),
                     "w",
                 ) as f:
