@@ -90,7 +90,7 @@ if __name__ == "__main__":
     def none_or_float(value):
         if value == "None":
             return None
-        return value
+        return float(value)
 
     parser = ArgumentParser()
     parser.add_argument(
