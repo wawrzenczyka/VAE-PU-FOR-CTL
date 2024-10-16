@@ -161,7 +161,7 @@ for metric in [
     pivot = results_df.pivot_table(
         values=metric,
         index=["c", "Dataset", "Label shift \\pi"],
-        columns=["BaseMethod", "Label shift method", "OCC"],
+        columns=["Label shift method", "BaseMethod", "OCC"],
     )
     pivot
     # results_df.pivot_table(values='Balanced accuracy', index=['c', "Dataset"], columns=["BaseMethod", "Balancing", "OCC"])

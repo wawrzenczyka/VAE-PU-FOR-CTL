@@ -20,6 +20,7 @@ plt.ylabel("$\\theta$")
 plt.xlabel("$\\tilde{\\pi}$")
 plt.ylim(0, 10)
 
+plt.savefig("theta.png", dpi=300, bbox_inches="tight")
 plt.show()
 plt.close()
 
@@ -46,6 +47,7 @@ plt.ylabel("$P(Y = 1 | S = 0)$")
 plt.xlabel("$\\pi$")
 # plt.ylim(0, 10)
 
+plt.savefig("P_Y1_S0.png", dpi=300, bbox_inches="tight")
 plt.show()
 plt.close()
 
