@@ -10,7 +10,7 @@ import seaborn as sns
 
 pd.set_option("display.max_rows", 500)
 
-root = "result-clean"
+root = "result"
 results = []
 
 for dataset in os.listdir(root):
@@ -141,6 +141,9 @@ results_df["OCC"] = np.where(
 # results_df.Method = results_df.Method.str.replace(
 #     "IsolationForest", "VP-IF", regex=False
 # )
+
+results_df["Label shift \\pi"] = results_df["Label shift \\pi"].fillna("None")
+
 results_df
 
 # %%
@@ -160,8 +163,9 @@ for metric in [
 ]:
     pivot = results_df.pivot_table(
         values=metric,
-        index=["c", "Dataset", "Label shift \\pi"],
-        columns=["Label shift method", "BaseMethod", "OCC"],
+        index=["Dataset", "Label shift \\pi", "c"],
+        columns=["BaseMethod", "OCC", "Label shift method"],
+        dropna=False,
     )
     pivot
     # results_df.pivot_table(values='Balanced accuracy', index=['c', "Dataset"], columns=["BaseMethod", "Balancing", "OCC"])
@@ -169,6 +173,43 @@ for metric in [
         pivot.eq(pivot.max(axis=1), axis=0), "*", ""
     )
     max_pivot.to_csv(os.path.join("label_shift_metrics", f"{metric}.csv"))
+
+# %%
+os.makedirs("label_shift_metrics_condensed", exist_ok=True)
+
+condensed_results_df = results_df.loc[
+    np.isin(
+        results_df["Label shift method"],
+        ["Augmented label shift", "Cutoff label shift", "EM label shift"],
+    )
+]
+condensed_results_df["Label shift method"] = condensed_results_df[
+    "Label shift method"
+].str.replace(" label shift", "")
+
+for metric in [
+    "Accuracy",
+    "Precision",
+    "Recall",
+    "F1 score",
+    "Balanced accuracy",
+    "U-Accuracy",
+    "U-Precision",
+    "U-Recall",
+    "U-F1 score",
+    "U-Balanced accuracy",
+]:
+    pivot = condensed_results_df.pivot_table(
+        values=metric,
+        index=["Dataset", "Label shift \\pi", "c"],
+        columns=["OCC", "Label shift method"],
+    )
+    pivot
+    # results_df.pivot_table(values='Balanced accuracy', index=['c', "Dataset"], columns=["BaseMethod", "Balancing", "OCC"])
+    max_pivot = pivot.applymap(lambda a: f"{a * 100:.1f}") + np.where(
+        pivot.eq(pivot.max(axis=1), axis=0), "*", ""
+    )
+    max_pivot.to_csv(os.path.join("label_shift_metrics_condensed", f"{metric}.csv"))
 
 # %%
 immediate_estimation_error = (
@@ -184,6 +225,40 @@ em_estimation_error = em_estimation_error.dropna()
 em_error = np.sqrt((em_estimation_error**2).mean())
 
 immediate_error, em_error
+
+# %%
+os.makedirs("pi_metrics", exist_ok=True)
+
+results_df["Immediate \\pi~ estimation error"] = (
+    results_df["Immediate \\pi estimation"] - results_df["True label shift \\pi"]
+).abs()
+results_df["EM \\pi~ estimation error"] = (
+    results_df["EM \\pi estimation"] - results_df["True label shift \\pi"]
+).abs()
+results_df["Immediate 1 / \\pi~ estimation error"] = (
+    1 / results_df["Immediate \\pi estimation"]
+    - 1 / results_df["True label shift \\pi"]
+).abs()
+results_df["EM 1 / \\pi~ estimation error"] = (
+    1 / results_df["EM \\pi estimation"] - 1 / results_df["True label shift \\pi"]
+).abs()
+
+for metric in [
+    "Immediate \\pi~ estimation error",
+    "EM \\pi~ estimation error",
+    "Immediate 1 / \\pi~ estimation error",
+    "EM 1 / \\pi~ estimation error",
+]:
+    pivot = results_df.pivot_table(
+        values=metric,
+        index=["Dataset", "Label shift \\pi", "c"],
+        columns=["BaseMethod", "OCC", "Label shift method"],
+    )
+    # display(pivot)
+
+    metric_file = metric.replace("1 / \\pi", "pi inverse").replace("\\pi", "pi")
+    pivot.to_csv(os.path.join("pi_metrics", f"{metric_file}.csv"))
+
 
 # %%
 for dataset, rename in [
