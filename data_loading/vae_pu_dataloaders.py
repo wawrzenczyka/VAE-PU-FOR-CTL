@@ -357,7 +357,7 @@ def get_label_shifted_datasets(dataset_data, label_shift_pi=None):
     if label_shift_pi is None:
         return dataset_data
 
-    # pi = P / P + N
+    # pi = P / (P + N)
 
     # pi P + pi N = P
     # N = P (1 - pi) / pi
@@ -378,12 +378,12 @@ def get_label_shifted_datasets(dataset_data, label_shift_pi=None):
         X_neg, y_neg, o_neg = X[y != 1], y[y != 1], o[y != 1]
 
         pi = torch.sum(y == 1) / len(y)
-        if pi < label_shift_pi:
+        if label_shift_pi > pi:
             n_pos = torch.sum(y == 1)
-            n_neg = int(n_pos * (1 - pi) / pi)
+            n_neg = int(n_pos * (1 - label_shift_pi) / label_shift_pi)
 
             sampled_neg_idx = torch.ones(len(y_pos)).multinomial(
-                num_samples=n_neg, replacement=True
+                num_samples=n_neg, replacement=False
             )
 
             X, y, o = (
@@ -391,12 +391,12 @@ def get_label_shifted_datasets(dataset_data, label_shift_pi=None):
                 torch.concat([y_pos, y_neg[sampled_neg_idx]]),
                 torch.concat([o_pos, o_neg[sampled_neg_idx]]),
             )
-        elif pi > label_shift_pi:
+        elif label_shift_pi < pi:
             n_neg = torch.sum(y != 1)
-            n_pos = int(n_neg * pi / (1 - pi))
+            n_pos = int(n_neg * label_shift_pi / (1 - label_shift_pi))
 
             sampled_pos_idx = torch.ones(len(y_pos)).multinomial(
-                num_samples=n_pos, replacement=True
+                num_samples=n_pos, replacement=False
             )
 
             X, y, o = (
