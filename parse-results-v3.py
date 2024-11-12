@@ -309,6 +309,14 @@ plt.show()
 
 # %%
 for metric in ["U-Balanced accuracy", "U-Accuracy"]:
+    results_df["Label shift label"] = np.where(
+        results_df["Label shift \\pi"] == "None",
+        "no shift",
+        "$\\widetilde{\\pi}="
+        + results_df["Label shift \\pi"].astype(str).str.slice(0, 3)
+        + "$",
+    )
+
     # First, calculate the rank of U-Accuracy values within each subgroup defined by ["Dataset", "Label shift label", 'c', 'Experiment']
     results_df[f"{metric} Rank"] = results_df.groupby(
         ["Dataset", "Label shift label", "c", "Experiment"]
@@ -331,6 +339,49 @@ for metric in ["U-Balanced accuracy", "U-Accuracy"]:
     display(pivot_df)
 
     pivot_df.round(2).to_csv(f"ranks_{metric}.csv")
+
+# %%
+for metric in ["U-Balanced accuracy", "U-Accuracy"]:
+    results_df["Label shift label"] = np.where(
+        results_df["Label shift \\pi"] == "None",
+        "no shift",
+        "$\\widetilde{\\pi}="
+        + results_df["Label shift \\pi"].astype(str).str.slice(0, 3)
+        + "$",
+    )
+
+    # Calculate the maximum accuracy value for each group (["Dataset", "Label shift label", "c", "Experiment"])
+    max_accuracy_df = results_df.groupby(
+        ["Dataset", "Label shift label", "c", "Experiment"]
+    )[metric].transform("max")
+
+    # Calculate the accuracy difference (current accuracy - maximum accuracy in the group)
+    results_df[f"{metric} Accuracy Difference"] = max_accuracy_df - results_df[metric]
+
+    # Compute the mean of the accuracy differences for each combination of ["Dataset", "Label shift label", 'Label shift method']
+    mean_accuracy_diff_df = (
+        results_df.groupby(["Dataset", "Label shift method"])[
+            f"{metric} Accuracy Difference"
+        ]
+        .mean()
+        .reset_index()
+    )
+
+    # Pivot the DataFrame as specified, with 'Label shift method' as the index and ["Dataset", "Label shift label"] as columns
+    pivot_df = mean_accuracy_diff_df.pivot(
+        values=f"{metric} Accuracy Difference",
+        columns="Dataset",
+        index="Label shift method",
+    )
+
+    # Calculate the mean accuracy difference across all columns for each 'Label shift method' and add it as the last column
+    pivot_df["Mean Difference"] = pivot_df.mean(axis=1)
+
+    # Display the final DataFrame with the new column showing the mean accuracy difference
+    display(pivot_df)
+
+    # Save the results to CSV
+    pivot_df.round(3).to_csv(f"mean_accuracy_diff_{metric}.csv")
 
 # %%
 os.makedirs("label_shift_metrics", exist_ok=True)
