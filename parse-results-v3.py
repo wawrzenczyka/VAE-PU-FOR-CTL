@@ -167,7 +167,7 @@ results_df = results_df[
 # results_df = results_df[(results_df["c"] != 0.02)]
 results_df = results_df[results_df["OCC"] == "Bayes"]
 
-results_df["Immediate \\pi~ estimation error"] = (
+results_df["Direct \\pi~ estimation error"] = (
     results_df["Immediate \\pi estimation"] - results_df["True label shift \\pi"]
 ).abs()
 results_df["EM \\pi~ estimation error"] = (
@@ -184,14 +184,14 @@ pi_mse_df = pd.concat(
         )
         .set_axis(["Value"], axis=1)
         .assign(Metric=metric)
-        for metric in ["Immediate \\pi~ estimation error", "EM \\pi~ estimation error"]
+        for metric in ["Direct \\pi~ estimation error", "EM \\pi~ estimation error"]
     ],
     axis=0,
 )
 pi_mse_df = pi_mse_df.reset_index(drop=False)
 pi_errors = (
-    pi_mse_df.groupby(["Dataset", "Label shift \\pi", "Metric"])
-    .Value.agg(lambda x: np.sqrt(np.sum(x**2 / len(x))))
+    pi_mse_df.groupby(["Dataset", "Label shift \\pi", "c", "Metric"])
+    .Value.mean()
     .reset_index(drop=False)
 )
 
@@ -223,17 +223,19 @@ results_df
 # %%
 sns.set_theme()
 
+palette = ["#000000", "#474747", "#909090"]
+
 for metric in ["U-Balanced accuracy", "U-Accuracy"]:
     results_df["Label shift label"] = np.where(
         results_df["Label shift \\pi"] == "None",
-        "no shift",
+        "No shift",
         "$\\widetilde{\\pi}="
         + results_df["Label shift \\pi"].astype(str).str.slice(0, 3)
         + "$",
     )
 
     facet = sns.FacetGrid(
-        results_df, row="Dataset", col="Label shift label", height=2.2
+        results_df, row="Label shift label", col="Dataset", height=2.2
     )
     facet.map_dataframe(
         sns.lineplot,
@@ -243,6 +245,9 @@ for metric in ["U-Balanced accuracy", "U-Accuracy"]:
         style="Label shift method",
         markers=True,
         errorbar="se",
+        palette=palette,
+        # err_style="bars",
+        # err_kws=dict(capsize=3, capthick=1),
     )
     facet.set_titles("{row_name}, {col_name}")
     facet.add_legend()
@@ -271,8 +276,10 @@ pi_errors["$\\widetilde{\\pi}$"] = np.where(
     pi_errors["Label shift \\pi"].astype(str).str.slice(0, 3),
 )
 
-pi_errors["Estimation method"] = np.where(
-    pi_errors["Metric"].str.contains("EM"), "EM", "Immediate estimator"
+pi_errors = pi_errors[pi_errors["Label shift \\pi"] != "None"]
+
+pi_errors["Estimator"] = np.where(
+    pi_errors["Metric"].str.contains("EM"), "EM estimator", "Direct estimator"
 )
 pi_errors["Error"] = pi_errors["Value"]
 
@@ -281,9 +288,14 @@ facet.map_dataframe(
     sns.lineplot,
     x="$\\widetilde{\\pi}$",
     y="Error",
-    hue="Estimation method",
-    style="Estimation method",
+    # hue="c",
+    hue="Estimator",
+    style="Estimator",
     markers=True,
+    # estimator=np.median,
+    errorbar=None,
+    # palette='deep'
+    palette=["#000000", "#777777"],
 )
 facet.set_titles("{col_name}")
 facet.add_legend()
@@ -304,6 +316,80 @@ for ax in facet.axes.flat:
 os.makedirs("plots", exist_ok=True)
 plt.savefig("plots/pi-errors.pdf", bbox_inches="tight")
 plt.savefig("plots/pi-errors.png", dpi=300, bbox_inches="tight")
+
+plt.show()
+
+# %%
+pi_errors_per_c = (
+    pi_mse_df.groupby(["Label shift \\pi", "c", "Metric"])
+    .Value.agg(lambda x: np.sqrt(np.mean(x**2)))
+    .reset_index(drop=False)
+)
+
+pi_errors_per_c["Estimator"] = np.where(
+    pi_errors_per_c["Metric"].str.contains("EM"), "EM", "Direct"
+)
+pi_errors_per_c["$\\widetilde{\\pi}$"] = np.where(
+    pi_errors_per_c["Label shift \\pi"] == "None",
+    "No shift",
+    pi_errors_per_c["Label shift \\pi"].astype(str).str.slice(0, 3),
+)
+
+pi_errors_per_c_pivot = pi_errors_per_c.pivot(
+    values="Value", index=["$\\widetilde{\\pi}$"], columns=["c", "Estimator"]
+)
+pi_errors_per_c_pivot.loc["Mean error"] = pi_errors_per_c_pivot.mean()
+pi_errors_per_c_pivot.round(3).to_csv("pi_errors_per_c.csv")
+
+pi_errors_per_c_pivot
+
+# %%
+sns.set_theme()
+
+pi_errors["$\\widetilde{\\pi}$"] = np.where(
+    pi_errors["Label shift \\pi"] == "None",
+    "No shift",
+    pi_errors["Label shift \\pi"].astype(str).str.slice(0, 3),
+)
+
+pi_errors = pi_errors[pi_errors["Label shift \\pi"] != "None"]
+
+pi_errors["Estimator"] = np.where(
+    pi_errors["Metric"].str.contains("EM"), "EM estimator", "Direct estimator"
+)
+pi_errors["Error"] = pi_errors["Value"]
+
+facet = sns.FacetGrid(pi_errors, col="Dataset", height=2.6, col_wrap=3)
+facet.map_dataframe(
+    sns.lineplot,
+    x="$\\widetilde{\\pi}$",
+    y="Error",
+    hue="c",
+    # hue="Estimator",
+    style="Estimator",
+    markers=True,
+    palette="deep",
+    # palette=["#000000", "#777777"],
+)
+facet.set_titles("{col_name}")
+facet.add_legend()
+
+sns.move_legend(
+    facet,
+    "lower center",
+    bbox_to_anchor=(0.69, 0.04),
+    ncol=1,
+    title=None,
+    frameon=False,
+)
+
+for ax in facet.axes.flat:
+    for label in ax.get_xticklabels():
+        label.set_rotation(45)
+
+os.makedirs("plots", exist_ok=True)
+plt.savefig("plots/pi-errors-per-c.pdf", bbox_inches="tight")
+plt.savefig("plots/pi-errors-per-c.png", dpi=300, bbox_inches="tight")
 
 plt.show()
 
@@ -449,11 +535,11 @@ for metric in [
     max_pivot.to_csv(os.path.join("label_shift_metrics_condensed", f"{metric}.csv"))
 
 # %%
-immediate_estimation_error = (
+direct_estimation_error = (
     results_df["Immediate \\pi estimation"] - results_df["True label shift \\pi"]
 ).abs()
-immediate_estimation_error = immediate_estimation_error.dropna()
-immediate_error = np.sqrt((immediate_estimation_error**2).mean())
+direct_estimation_error = direct_estimation_error.dropna()
+direct_error = np.sqrt((direct_estimation_error**2).mean())
 
 em_estimation_error = (
     results_df["EM \\pi estimation"] - results_df["True label shift \\pi"]
@@ -461,18 +547,18 @@ em_estimation_error = (
 em_estimation_error = em_estimation_error.dropna()
 em_error = np.sqrt((em_estimation_error**2).mean())
 
-immediate_error, em_error
+direct_error, em_error
 
 # %%
 os.makedirs("pi_metrics", exist_ok=True)
 
-results_df["Immediate \\pi~ estimation error"] = (
+results_df["Direct \\pi~ estimation error"] = (
     results_df["Immediate \\pi estimation"] - results_df["True label shift \\pi"]
 ).abs()
 results_df["EM \\pi~ estimation error"] = (
     results_df["EM \\pi estimation"] - results_df["True label shift \\pi"]
 ).abs()
-results_df["Immediate 1 / \\pi~ estimation error"] = (
+results_df["Direct 1 / \\pi~ estimation error"] = (
     1 / results_df["Immediate \\pi estimation"]
     - 1 / results_df["True label shift \\pi"]
 ).abs()
@@ -481,9 +567,9 @@ results_df["EM 1 / \\pi~ estimation error"] = (
 ).abs()
 
 for metric in [
-    "Immediate \\pi~ estimation error",
+    "Direct \\pi~ estimation error",
     "EM \\pi~ estimation error",
-    "Immediate 1 / \\pi~ estimation error",
+    "Direct 1 / \\pi~ estimation error",
     "EM 1 / \\pi~ estimation error",
 ]:
     pivot = results_df.pivot_table(
