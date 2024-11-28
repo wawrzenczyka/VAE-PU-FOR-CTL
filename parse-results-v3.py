@@ -164,7 +164,7 @@ results_df = results_df[
     (results_df["Dataset"] != "CDC-Diabetes")
     & (~results_df["Dataset"].str.contains("SCAR"))
 ]
-# results_df = results_df[(results_df["c"] != 0.02)]
+results_df = results_df[(results_df["c"] != 0.02)]
 results_df = results_df[results_df["OCC"] == "Bayes"]
 
 results_df["Direct \\pi~ estimation error"] = (
