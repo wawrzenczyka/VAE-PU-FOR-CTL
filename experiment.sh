@@ -21,5 +21,5 @@ conda activate vae-pu-env
 echo "$dataset" "$training_mode" $label_frequency $start_idx
 echo $SLURM_JOB_ID: "$dataset" "$training_mode" $label_frequency $start_idx >> all-experiments.log
 
-python -u ./main.py --dataset "$dataset" --training_mode "$training_mode" --c $label_frequency --start_idx $start_idx --num_experiments 1 --label_shift_pi None 0.7 0.5 0.3 0.1 0.9
+python -u ./main.py --dataset "$dataset" --training_mode "$training_mode" --c $label_frequency --start_idx $start_idx --num_experiments 1
 
