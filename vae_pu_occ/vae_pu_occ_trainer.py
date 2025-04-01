@@ -542,8 +542,8 @@ class VaePuOccTrainer(VaePuTrainer):
             raise ValueError(f"Invalid occ_method format: {occ_method}")
 
         construct_clf = lambda method_name=method_name: self._get_occ(method_name)
-        cutoff = MultisplitCutoff(construct_clf, alpha, resampling_repeats=10)
-        cutoff.fit(x_pu_gen, y=None)
+        cutoff = MultisplitCutoff(construct_clf, alpha, resampling_repeats=10, n_jobs=1)
+        cutoff.fit(x_pu_gen)
 
         self._for_ctl_cutoff = cutoff
 
@@ -664,54 +664,40 @@ class VaePuOccTrainer(VaePuTrainer):
         os.makedirs(
             os.path.join(self.config["directory"], "occ", occ_method), exist_ok=True
         )
+        acc, precision, recall, f1_score, auc, b_acc = self.model.accuracy(
+            self.DL_test,
+            balanced_cutoff=self.balanced_cutoff,
+            pi_p=self.config["pi_p"],
+        )
+        occ_acc, occ_auc, occ_precision, occ_recall, occ_f1, occ_fdr = occ_metrics
+        metric_values = {
+            "Method": f"{self.model_type}+{occ_method}",
+            "OCC accuracy": occ_acc,
+            "OCC precision": occ_precision,
+            "OCC recall": occ_recall,
+            "OCC F1 score": occ_f1,
+            "OCC AUC": occ_auc,
+            "Accuracy": acc,
+            "Precision": precision,
+            "Recall": recall,
+            "AUC": auc,
+            "Balanced accuracy": b_acc,
+            "F1 score": f1_score,
+            "Best epoch": best_epoch + 1,
+        }
+        if self.baseline_training_time is not None:
+            metric_values["Time"] = self.baseline_training_time + self.occ_training_time
 
-        if (
-            "Augmented label shift" in self.config["label_shift_methods"]
-            and not hasattr(self, "no_ls_s_model")
-            and self.no_ls_s_model is None
-        ):
-            self.no_ls_s_model = self.train_no_ls_s_model()
-
-        for label_shift_pi in self.config["label_shift_pis"]:
-            for label_shift_method in self.config["label_shift_methods"]:
-                print(
-                    f"--- Label shift method: {label_shift_method}, pi shift: "
-                    + (
-                        f"{label_shift_pi:.2f}"
-                        if label_shift_pi is not None
-                        else "None"
-                    )
-                    + " ---"
-                )
-
-                metric_values = self._calculate_ls_metrics(
-                    method=f"{self.model_type}+{occ_method}",
-                    label_shift_method=label_shift_method,
-                    label_shift_pi=label_shift_pi,
-                    time=self.occ_training_time,
-                )
-
-                if self.baseline_training_time is not None:
-                    metric_values["Time"] = (
-                        self.baseline_training_time + self.occ_training_time
-                    )
-
-                with open(
-                    os.path.join(
-                        self.config["directory"],
-                        "occ",
-                        occ_method,
-                        f"metric_values_{self.model_type}+{occ_method}_ls-{label_shift_method}-"
-                        + (
-                            f"{label_shift_pi:.2f}"
-                            if label_shift_pi is not None
-                            else "None"
-                        )
-                        + ".json",
-                    ),
-                    "w",
-                ) as f:
-                    json.dump(metric_values, f)
+        with open(
+            os.path.join(
+                self.config["directory"],
+                "occ",
+                occ_method,
+                f"metric_values_{self.model_type}+{occ_method}.json",
+            ),
+            "w",
+        ) as f:
+            json.dump(metric_values, f)
         return self.model
 
     def _save_results(self):

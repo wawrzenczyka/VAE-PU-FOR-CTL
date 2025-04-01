@@ -8,12 +8,12 @@ import numpy as np
 import pkbar
 import tensorflow as tf
 import torch
+from sklearn import metrics
 from torch.nn import BCEWithLogitsLoss
 from torch.optim import Adam
 from torch.utils.data import DataLoader, TensorDataset, random_split
 
 from data_loading.utils import InfiniteDataLoader
-from metrics_custom import calculate_metrics
 from vae_pu_occ.early_stopping import EarlyStopping
 
 from .model import (
@@ -166,225 +166,31 @@ class VaePuTrainer:
                 time.perf_counter() - self.baseline_training_start
             )
 
-        if "Augmented label shift" in self.config["label_shift_methods"]:
-            self.no_ls_s_model = self.train_no_ls_s_model()
+            (
+                self.acc_pre_occ,
+                self.precision_pre_occ,
+                self.recall_pre_occ,
+                self.f1_pre_occ,
+                self.auc_pre_occ,
+                self.b_acc_pre_occ,
+            ) = self.model.accuracy(
+                self.DL_test,
+                balanced_cutoff=self.balanced_cutoff,
+                pi_p=self.config["pi_p"],
+            )
 
-        for label_shift_pi in self.config["label_shift_pis"]:
-            for label_shift_method in self.config["label_shift_methods"]:
-                np.random.seed(self.num_exp)
-                torch.manual_seed(self.num_exp)
-                tf.random.set_seed(self.num_exp)
-
-                print(
-                    f"--- Label shift method: {label_shift_method}, pi shift: "
-                    + (
-                        f"{label_shift_pi:.2f}"
-                        if label_shift_pi is not None
-                        else "None"
-                    )
-                    + " ---"
-                )
-
-                metric_values = self._calculate_ls_metrics(
-                    method=self.model_type,
-                    label_shift_method=label_shift_method,
-                    label_shift_pi=label_shift_pi,
-                    time=self.baseline_training_time,
-                )
-                self._save_final_vae_pu_metric_values(
-                    metric_values, label_shift_method, label_shift_pi
-                )
+            metric_values = {
+                "Method": self.model_type,
+                "Accuracy": self.acc_pre_occ,
+                "Precision": self.precision_pre_occ,
+                "Recall": self.recall_pre_occ,
+                "F1 score": self.f1_pre_occ,
+                "AUC": self.auc_pre_occ,
+                "Balanced accuracy": self.b_acc_pre_occ,
+                "Time": self.baseline_training_time,
+            }
+            self._save_final_vae_pu_metric_values(metric_values)
         return self.model
-
-    def train_ls_s_model(self, ls_dataset):
-        ls_train_dataset, ls_val_dataset = random_split(
-            ls_dataset,
-            [int(0.8 * len(ls_dataset)), len(ls_dataset) - int(0.8 * len(ls_dataset))],
-        )
-        ls_train_DL, ls_val_DL = DataLoader(
-            ls_train_dataset,
-            batch_size=128,
-            shuffle=True,
-            drop_last=True,
-        ), DataLoader(
-            ls_val_dataset,
-            batch_size=128,
-        )
-        ls_s_model = self._train_custom_s_classifier(ls_train_DL, ls_val_DL)
-        ls_s_model.eval()
-        return ls_s_model
-
-    def train_no_ls_s_model(self):
-        if hasattr(self, "no_shift_s_model") and self.no_shift_s_model is not None:
-            return self.no_shift_s_model
-
-        DL_train = DataLoader(
-            TensorDataset(
-                torch.concat([self.x_pl_full, self.x_u_full]),
-                torch.concat([self.y_pl_full, self.y_u_full]),
-                torch.concat(
-                    [
-                        torch.ones(self.x_pl_full.shape[0]).to(self.x_pl_full.device),
-                        torch.zeros(self.x_u_full.shape[0]).to(self.x_u_full.device),
-                    ]
-                ),
-            ),
-            batch_size=128,
-            shuffle=True,
-            drop_last=True,
-        )
-        DL_val = DataLoader(
-            TensorDataset(self.x_val, self.y_val, self.s_val),
-            batch_size=128,
-        )
-        self.no_shift_s_model = self._train_custom_s_classifier(DL_train, DL_val)
-        self.no_shift_s_model.eval()
-        return self.no_shift_s_model
-
-    def fit_label_shift_EM(self, DL):
-        y_probas = []
-
-        for x, _, _ in DL:
-            y_proba = self.model.model_pn.classify(x, sigmoid=True).reshape(-1)
-            y_probas.append(y_proba)
-
-        y_proba = torch.cat(y_probas).detach().cpu().numpy()
-
-        pi_shift = 0.5
-        pi = self.config["pi_p"]
-
-        tol = 1e-5
-        while True:
-            pi_shift_prev = pi_shift
-            P_ls = self.P_ls_EM(y_proba, pi_shift, pi)
-            pi_shift = np.mean(P_ls)
-
-            if np.abs(pi_shift_prev - pi) < tol:
-                self.pi_shift_EM = pi_shift
-                break
-            else:
-                tol += 1e-5
-
-    def P_ls_EM(self, y_proba, pi_shift, pi):
-        return ((pi_shift / pi) * y_proba) / (
-            ((pi_shift / pi) * y_proba) + (((1 - pi_shift) / (1 - pi)) * (1 - y_proba))
-        )
-
-    def get_label_shift_proba_function(self, pi_shift):
-        return lambda y_proba, pi_shift=pi_shift, pi=self.config["pi_pl"]: self.P_ls_EM(
-            y_proba, pi_shift, pi
-        )
-
-    def _calculate_ls_metrics(self, method, label_shift_method, label_shift_pi, time):
-        ls_dataset = self._get_label_shifted_test_dataset(label_shift_pi)
-        ls_DL = DataLoader(
-            ls_dataset,
-            batch_size=self.config["batch_size_test"],
-        )
-
-        augmented_label_shift = "Augmented label shift" in label_shift_method
-        cutoff_label_shift = "Cutoff label shift" in label_shift_method
-        cutoff_true_pi_shift = "Cutoff true pi label shift" in label_shift_method
-        odds_ratio_label_shift = "Odds ratio label shift" in label_shift_method
-        em_label_shift = "EM label shift" in label_shift_method
-        simple_label_shift = "Simple label shift" in label_shift_method
-        non_ls_augmented = "Non-LS augmented" in label_shift_method
-
-        y_probas = []
-        y_trues = []
-        s_trues = []
-        ls_s_probas = []
-        no_ls_s_probas = []
-
-        ls_s_model = None
-        if (
-            augmented_label_shift
-            or cutoff_label_shift
-            or cutoff_true_pi_shift
-            or non_ls_augmented
-        ):
-            ls_s_model = self.train_ls_s_model(ls_dataset)
-        if em_label_shift:
-            self.fit_label_shift_EM(DL=ls_DL)
-        if (
-            simple_label_shift
-            or cutoff_label_shift
-            or cutoff_true_pi_shift
-            or odds_ratio_label_shift
-        ):
-            self.fit_label_shift_simple(DL=ls_DL)
-
-        for x, y, s in ls_DL:
-            y_proba = self.model.model_pn.classify(x, sigmoid=True).reshape(-1)
-            y_probas.append(y_proba)
-            y_trues.append(y)
-            s_trues.append(s)
-
-            if ls_s_model is not None:
-                ls_s_proba = ls_s_model.classify(x, sigmoid=True).reshape(-1)
-                ls_s_probas.append(ls_s_proba)
-            if self.no_ls_s_model is not None:
-                no_ls_s_proba = self.no_ls_s_model.classify(x, sigmoid=True).reshape(-1)
-                no_ls_s_probas.append(no_ls_s_proba)
-
-        y_proba = torch.cat(y_probas).detach().cpu().numpy()
-        y_true = torch.cat(y_trues).detach().cpu().numpy()
-        s_true = torch.cat(s_trues).detach().cpu().numpy()
-        pi_shift_true = np.mean(y_true == 1)
-        if ls_s_model is not None:
-            ls_s_proba = torch.cat(ls_s_probas).detach().cpu().numpy()
-        if self.no_ls_s_model is not None:
-            no_ls_s_proba = torch.cat(no_ls_s_probas).detach().cpu().numpy()
-
-        metric_values = calculate_metrics(
-            y_proba,
-            y_true,
-            s_true,
-            ls_s_proba if ls_s_model is not None else None,
-            no_ls_s_proba if self.no_ls_s_model is not None else None,
-            method=method,
-            time=time,
-            ls_method=label_shift_method,
-            ls_pi=label_shift_pi,
-            augmented_label_shift=augmented_label_shift,
-            cutoff_label_shift=cutoff_label_shift,
-            cutoff_true_pi_shift=cutoff_true_pi_shift,
-            odds_ratio_label_shift=odds_ratio_label_shift,
-            non_ls_augmented=non_ls_augmented,
-            pi_train_true=self.config["pi_pl"],
-            pi_shift_true=pi_shift_true,
-            pi_shift_estimation_simple=(
-                self.pi_shift_simple if hasattr(self, "pi_shift_simple") else None
-            ),
-            pi_shift_estimation_em=(
-                self.pi_shift_EM if hasattr(self, "pi_shift_EM") else None
-            ),
-            em_label_shift=em_label_shift,
-            em_label_shift_proba_function=self.get_label_shift_proba_function(
-                self.pi_shift_EM if hasattr(self, "pi_shift_EM") else None
-            ),
-            simple_label_shift=simple_label_shift,
-            simple_label_shift_proba_function=self.get_label_shift_proba_function(
-                self.pi_shift_simple if hasattr(self, "pi_shift_simple") else None
-            ),
-        )
-
-        return metric_values
-
-    def fit_label_shift_simple(self, DL):
-        s_shifts = []
-
-        for _, _, s in DL:
-            s_shifts.append(s)
-
-        s_shift = torch.cat(s_shifts).detach().cpu().numpy()
-
-        s_prior_shift = np.mean(s_shift == 1)
-        s_prior = len(self.x_pl_full) / (len(self.x_pl_full) + len(self.x_u_full))
-
-        pi = self.config["pi_p"]
-        pi_shift = (s_prior_shift / s_prior) * pi
-        self.pi_shift_simple = pi_shift
 
     def _prepare_metrics(self):
         self.elbos = []
@@ -398,14 +204,10 @@ class VaePuTrainer:
         self.timesAutoencoder = []
         self.timesTargetClassifier = []
 
-    def _save_final_vae_pu_metric_values(
-        self, metric_values, label_shift_method, label_shift_pi
-    ):
+    def _save_final_vae_pu_metric_values(self, metric_values):
         metrics_path = os.path.join(
             self.config["directory"],
-            f"metric_values_{self.model_type}_ls-{label_shift_method}-"
-            + (f"{label_shift_pi:.2f}" if label_shift_pi is not None else "None")
-            + ".json",
+            f"metric_values_{self.model_type}.json",
         )
         if self.use_original_paper_code:
             metrics_path = os.path.join(
@@ -829,41 +631,3 @@ class VaePuTrainer:
             )
         )
         return model
-
-    def _get_label_shifted_test_dataset(self, label_shift_pi):
-        X, y, s = self.x_test, self.y_test, self.s_test
-        if label_shift_pi is None:
-            return TensorDataset(X, y, s)
-
-        X_pos, y_pos, s_pos = X[y == 1], y[y == 1], s[y == 1]
-        X_neg, y_neg, s_neg = X[y != 1], y[y != 1], s[y != 1]
-
-        pi = torch.sum(y == 1) / len(y)
-        if pi < label_shift_pi:
-            n_pos = torch.sum(y == 1).item()
-            n_neg = int(n_pos * (1 - label_shift_pi) / label_shift_pi)
-
-            sampled_neg_idx = torch.ones(len(y_neg)).multinomial(
-                num_samples=n_neg, replacement=True
-            )
-
-            X, y, s = (
-                torch.concat([X_pos, X_neg[sampled_neg_idx]]),
-                torch.concat([y_pos, y_neg[sampled_neg_idx]]),
-                torch.concat([s_pos, s_neg[sampled_neg_idx]]),
-            )
-        elif pi > label_shift_pi:
-            n_neg = torch.sum(y != 1)
-            n_pos = int(n_neg * label_shift_pi / (1 - label_shift_pi))
-
-            sampled_pos_idx = torch.ones(len(y_pos)).multinomial(
-                num_samples=n_pos, replacement=True
-            )
-
-            X, y, s = (
-                torch.concat([X_neg, X_pos[sampled_pos_idx]]),
-                torch.concat([y_neg, y_pos[sampled_pos_idx]]),
-                torch.concat([s_neg, s_pos[sampled_pos_idx]]),
-            )
-
-        return TensorDataset(X, y, s)

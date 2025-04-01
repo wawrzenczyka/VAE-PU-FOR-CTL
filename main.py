@@ -13,17 +13,18 @@ from config import config
 from data_loading.vae_pu_dataloaders import create_vae_pu_adapter, get_dataset
 from external.LBE import eval_LBE, train_LBE
 from external.nnPUlearning.api import nnPU
-from external.sar_experiment import SAREMThreadedExperiment
+
+# from external.sar_experiment import SAREMThreadedExperiment
 from external.two_step import eval_2_step, train_2_step
 from vae_pu_occ.vae_pu_occ_trainer import VaePuOccTrainer
 
 label_frequencies = [
-    # 0.9,
-    # 0.7,
+    0.9,
+    0.7,
     0.5,
-    # 0.3,
-    # 0.1,
-    # 0.02
+    0.3,
+    0.1,
+    0.02
 ]
 
 start_idx = 0
@@ -32,37 +33,30 @@ epoch_multiplier = 1
 
 datasets = [
     "MNIST 3v5",
+    "MNIST OvE",
+    "CIFAR CarTruck",
+    "CIFAR MachineAnimal",
+    "STL MachineAnimal",
+    "CDC-Diabetes",
 ]
 
 training_modes = [
     "VAE-PU",
 ]
 
-label_shift_pis = [None]
-label_shift_methods = [
-    "None",
-    # "Augmented label shift",
-    # "Cutoff label shift",
-    # "Cutoff true pi label shift",
-    # "Odds ratio label shift",
-    # "EM label shift",
-    # "Simple label shift",
-    # "Non-LS augmented",
-]
-
 case_control = False
 synthetic_labels = False
 
 config["occ_methods"] = [
-    # "IsolationForest",
-    # "A^3",
     # "OddsRatio-PUprop-e200-lr1e-4",
-    "A^3_FOR-CTL-0.05",
-    "A^3_FOR-CTL-0.1",
-    "A^3_FOR-CTL-0.2",
-    "IsolationForest_FOR-CTL-0.05",
+    "IsolationForest",
     "IsolationForest_FOR-CTL-0.1",
+    "IsolationForest_FOR-CTL-0.05",
     "IsolationForest_FOR-CTL-0.2",
+    "A^3",
+    "A^3_FOR-CTL-0.1",
+    "A^3_FOR-CTL-0.05",
+    "A^3_FOR-CTL-0.2",
 ]
 
 config["use_original_paper_code"] = False
@@ -136,26 +130,6 @@ if __name__ == "__main__":
     parser.add_argument("-i", "--start_idx", type=int, required=False)
     parser.add_argument("-cc", "--case_control", action="store_true")
     parser.add_argument("-n", "--num_experiments", type=int, default=1, required=False)
-    parser.add_argument(
-        "-lsp", "--label_shift_pi", type=none_or_float, nargs="+", required=False
-    )
-    parser.add_argument(
-        "-lsm",
-        "--label_shift_method",
-        type=str,
-        nargs="+",
-        required=False,
-        choices=[
-            "None",
-            "Augmented label shift",
-            "Cutoff label shift",
-            "Cutoff true pi label shift",
-            "Odds ratio label shift",
-            "EM label shift",
-            "Simple label shift",
-            "Non-LS augmented",
-        ],
-    )
     parser.add_argument("--f", type=str, required=False)
     args = parser.parse_args()
 
@@ -174,10 +148,6 @@ if __name__ == "__main__":
         case_control = args.case_control
     if args.num_experiments is not None:
         num_experiments = args.num_experiments
-    if args.label_shift_pi is not None:
-        label_shift_pis = args.label_shift_pi
-    if args.label_shift_method is not None:
-        label_shift_methods = args.label_shift_method
 
     print("Device:", "cuda" if torch.cuda.is_available() else "cpu")
 
@@ -185,9 +155,6 @@ if __name__ == "__main__":
 n_threads = multiprocessing.cpu_count()
 sem = threading.Semaphore(n_threads)
 threads = []
-
-config["label_shift_pis"] = label_shift_pis
-config["label_shift_methods"] = label_shift_methods
 
 for dataset in datasets:
     config["data"] = dataset
@@ -338,17 +305,18 @@ for dataset in datasets:
                     )
 
                     if config["training_mode"] == "SAR-EM":
-                        exp_thread = SAREMThreadedExperiment(
-                            train_samples,
-                            test_samples,
-                            idx,
-                            base_label_frequency,
-                            config,
-                            method_dir,
-                            sem,
-                        )
-                        exp_thread.start()
-                        threads.append(exp_thread)
+                        raise NotImplementedError()
+                        # exp_thread = SAREMThreadedExperiment(
+                        #     train_samples,
+                        #     test_samples,
+                        #     idx,
+                        #     base_label_frequency,
+                        #     config,
+                        #     method_dir,
+                        #     sem,
+                        # )
+                        # exp_thread.start()
+                        # threads.append(exp_thread)
                     else:
                         if config["training_mode"] == "LBE":
                             log_prefix = f"Exp {idx}, c: {base_label_frequency} || "
