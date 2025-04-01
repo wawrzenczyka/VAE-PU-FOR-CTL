@@ -1,0 +1,12 @@
+__pycache__/
+*.csv
+data/
+occ-data/
+latex/
+*.png
+*.pdf
+*.zip
+*.h5
+*.joblib
+*.npy
+*.tar.gz
