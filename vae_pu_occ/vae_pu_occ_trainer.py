@@ -22,6 +22,7 @@ from external.cccpv.methods import ConformalPvalues
 from external.ecod_v2 import ECODv2
 from external.em_pu_cc import train_em_pu_cc
 from external.nnPUlearning.api import nnPU
+from external.occ_cutoffs import MultisplitCutoff
 from external.pyod_wrapper import PyODWrapper
 from external.vpu.api import VPU
 from vae_pu_occ.early_stopping import EarlyStopping
@@ -175,6 +176,11 @@ class VaePuOccTrainer(VaePuTrainer):
             elif "nnPU" in occ_method:
                 self._train_nnPU()
                 true_x_pu, pu_indices = self._select_true_x_pu_nnPU(
+                    self.x_u_full, pu_to_u_ratio
+                )
+            elif "FOR-CTL" in occ_method:
+                self._train_occ_for_ctl(occ_method, x_pu_gen)
+                true_x_pu, pu_indices = self._select_true_x_pu_for_ctl(
                     self.x_u_full, pu_to_u_ratio
                 )
             else:
@@ -492,7 +498,7 @@ class VaePuOccTrainer(VaePuTrainer):
         true_x_pu = x_u[pu_indices]
         return true_x_pu, pu_indices
 
-    def _train_occ(self, occ_method, x_pu_gen):
+    def _get_occ(self, occ_method):
         # Initialize the one-class classifier
         contamination = 0.001
         contamination = min(max(contamination, 0.004), 0.1)
@@ -514,10 +520,32 @@ class VaePuOccTrainer(VaePuTrainer):
             elif "COPOD" in occ_method:
                 occ = PyODWrapper(COPOD(contamination=contamination, n_jobs=-2))
 
+        return occ
+
+    def _train_occ(self, occ_method, x_pu_gen):
+        occ = self._get_occ(occ_method)
+
         self.cc = ConformalPvalues(
             x_pu_gen, occ, calib_size=0.5, random_state=self.num_exp
         )
         return self.cc
+
+    def _train_occ_for_ctl(self, occ_method, x_pu_gen):
+        import re
+
+        pattern = r"(.+)_FOR-CTL-(.+)"  # {OCC_method}_FOR-CTL-{alpha}
+        match = re.match(pattern, occ_method)
+        if match:
+            method_name = match.group(1)
+            alpha = float(match.group(2))
+        else:
+            raise ValueError(f"Invalid occ_method format: {occ_method}")
+
+        construct_clf = lambda method_name=method_name: self._get_occ(method_name)
+        cutoff = MultisplitCutoff(construct_clf, alpha, resampling_repeats=10)
+        cutoff.fit(x_pu_gen, y=None)
+
+        self._for_ctl_cutoff = cutoff
 
     def _select_true_x_pu_occ(self, x_u, pu_to_u_ratio):
         pvals_one_class = self.cc.predict(x_u.cpu().numpy(), delta=0.05, simes_kden=2)
@@ -528,6 +556,14 @@ class VaePuOccTrainer(VaePuTrainer):
         sorted_indices = torch.argsort(pvals, descending=True)
         n_pu_samples = round(pu_to_u_ratio * len(x_u))
         pu_indices = sorted_indices[:n_pu_samples]
+        true_x_pu = x_u[pu_indices]
+        return true_x_pu, pu_indices
+
+    def _select_true_x_pu_for_ctl(self, x_u, pu_to_u_ratio):
+        p_values, y_pred = self._for_ctl_cutoff.apply(
+            x_u.cpu().numpy(), inlier_rate=pu_to_u_ratio
+        )
+        pu_indices = np.where(y_pred == 1)[0]
         true_x_pu = x_u[pu_indices]
         return true_x_pu, pu_indices
 

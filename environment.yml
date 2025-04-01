@@ -29,10 +29,10 @@ dependencies:
   - protobuf=3.20.0
   - chainer=7.8.1
   - pkbar=0.5
-  - altair=5.4.1
-  - cairosvg=2.7.1
-  - vegafusion=1.6.9
-  - vegafusion-python-embed=1.6.9
-  - vl-convert-python=1.6.1
+  # - altair=5.4.1
+  # - cairosvg=2.7.1
+  # - vegafusion=1.6.9
+  # - vegafusion-python-embed=1.6.9
+  # - vl-convert-python=1.6.1
   - pip:
       - ucimlrepo==0.0.3

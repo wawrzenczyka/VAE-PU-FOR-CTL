@@ -38,16 +38,16 @@ training_modes = [
     "VAE-PU",
 ]
 
-label_shift_pis = [0.9, 0.7, 0.5, 0.3, 0.1]
+label_shift_pis = [None]
 label_shift_methods = [
     "None",
-    "Augmented label shift",
-    "Cutoff label shift",
-    "Cutoff true pi label shift",
-    "Odds ratio label shift",
-    "EM label shift",
-    "Simple label shift",
-    "Non-LS augmented",
+    # "Augmented label shift",
+    # "Cutoff label shift",
+    # "Cutoff true pi label shift",
+    # "Odds ratio label shift",
+    # "EM label shift",
+    # "Simple label shift",
+    # "Non-LS augmented",
 ]
 
 case_control = False
@@ -56,7 +56,13 @@ synthetic_labels = False
 config["occ_methods"] = [
     # "IsolationForest",
     # "A^3",
-    "OddsRatio-PUprop-e200-lr1e-4",
+    # "OddsRatio-PUprop-e200-lr1e-4",
+    "A^3_FOR-CTL-0.05",
+    "A^3_FOR-CTL-0.1",
+    "A^3_FOR-CTL-0.2",
+    "IsolationForest_FOR-CTL-0.05",
+    "IsolationForest_FOR-CTL-0.1",
+    "IsolationForest_FOR-CTL-0.2",
 ]
 
 config["use_original_paper_code"] = False
