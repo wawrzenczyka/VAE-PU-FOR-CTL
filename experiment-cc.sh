@@ -7,7 +7,7 @@
 #SBATCH --ntasks=1 # Run a single task
 #SBATCH --gpus=1 # Run on single GPU
 #SBATCH --mem=16gb # Memory requirement
-#SBATCH --time=02:00:00 # Time limit days-hrs:min:sec
+#SBATCH --time=06:00:00 # Time limit days-hrs:min:sec
 #SBATCH --partition=experimental
 #SBATCH --output=log-%j.log # Standard output and error log
 
