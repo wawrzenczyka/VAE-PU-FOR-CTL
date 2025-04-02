@@ -565,6 +565,10 @@ class VaePuOccTrainer(VaePuTrainer):
         )
         pu_indices = np.where(y_pred == 1)[0]
         true_x_pu = x_u[pu_indices]
+
+        self.expected_n_pu = round(pu_to_u_ratio * len(x_u))
+        self.actual_n_pu = len(pu_indices)
+
         return true_x_pu, pu_indices
 
     def _select_true_x_pu_clustering(self, x_pl, x_u, pu_to_u_ratio, occ_method):
@@ -682,6 +686,8 @@ class VaePuOccTrainer(VaePuTrainer):
             "Recall": recall,
             "AUC": auc,
             "Balanced accuracy": b_acc,
+            "Expected n_PU": self.expected_n_pu if "FOR-CTL" in occ_method else None,
+            "Actual n_PU": self.actual_n_pu if "FOR-CTL" in occ_method else None,
             "F1 score": f1_score,
             "Best epoch": best_epoch + 1,
         }
