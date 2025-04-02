@@ -52,10 +52,12 @@ config["occ_methods"] = [
     "IsolationForest",
     "IsolationForest_FOR-CTL-0.1",
     "IsolationForest_FOR-CTL-0.05",
+    "IsolationForest_FOR-CTL-0.01",
     "IsolationForest_FOR-CTL-0.2",
     "A^3",
     "A^3_FOR-CTL-0.1",
     "A^3_FOR-CTL-0.05",
+    "A^3_FOR-CTL-0.01",
     "A^3_FOR-CTL-0.2",
 ]
 
