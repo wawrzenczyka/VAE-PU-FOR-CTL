@@ -22,7 +22,7 @@ from external.cccpv.methods import ConformalPvalues
 from external.ecod_v2 import ECODv2
 from external.em_pu_cc import train_em_pu_cc
 from external.nnPUlearning.api import nnPU
-from external.occ_cutoffs import MultisplitCutoff
+from external.occ_cutoffs import FORControlCutoff, MultisplitCutoff
 from external.pyod_wrapper import PyODWrapper
 from external.vpu.api import VPU
 from vae_pu_occ.early_stopping import EarlyStopping
@@ -542,10 +542,15 @@ class VaePuOccTrainer(VaePuTrainer):
             raise ValueError(f"Invalid occ_method format: {occ_method}")
 
         construct_clf = lambda method_name=method_name: self._get_occ(method_name)
-        cutoff = MultisplitCutoff(construct_clf, alpha, resampling_repeats=10, n_jobs=1)
-        cutoff.fit(x_pu_gen)
+        base_cutoff = MultisplitCutoff(
+            construct_clf, 
+            alpha, 
+            resampling_repeats=10, 
+            n_jobs=1
+        )
+        base_cutoff.fit(x_pu_gen)
 
-        self._for_ctl_cutoff = cutoff
+        self._base_cutoff = base_cutoff
 
     def _select_true_x_pu_occ(self, x_u, pu_to_u_ratio):
         pvals_one_class = self.cc.predict(x_u.cpu().numpy(), delta=0.05, simes_kden=2)
@@ -560,9 +565,12 @@ class VaePuOccTrainer(VaePuTrainer):
         return true_x_pu, pu_indices
 
     def _select_true_x_pu_for_ctl(self, x_u, pu_to_u_ratio):
-        p_values, y_pred = self._for_ctl_cutoff.apply(
-            x_u.cpu().numpy(), inlier_rate=pu_to_u_ratio
+        for_ctl_cutoff = FORControlCutoff(
+            self._base_cutoff,
+            alpha=self._base_cutoff.alpha,
+            pi=pu_to_u_ratio,
         )
+        pvals, y_pred = for_ctl_cutoff.fit_apply(x_u.cpu().numpy())
         pu_indices = np.where(y_pred == 1)[0]
         true_x_pu = x_u[pu_indices]
 

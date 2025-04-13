@@ -1,9 +1,9 @@
-cd VAE-PU-label-shift/
+cd VAE-PU-FOR-CTL/
 conda activate vae-pu-env
 tar -czf results.tar.gz --exclude=**/*.pt result/
-cp results.tar.gz results-2024-10-17.tar.gz
+cp results.tar.gz results-2025-04-09.tar.gz
 
-scp awawrzenczyk@eden.mini.pw.edu.pl:~/VAE-PU-label-shift/results-2024-10-17.tar.gz \
-results-2024-10-17.tar.gz
+scp awawrzenczyk@eden.mini.pw.edu.pl:~/VAE-PU-FOR-CTL/results-2025-04-09.tar.gz \
+results-2025-04-09.tar.gz
 
-scp wawrzenczyka@ssh.mini.pw.edu.pl:~/results-2024-10-17.tar.gz results-2024-10-17.tar.gz
+scp wawrzenczyka@ssh.mini.pw.edu.pl:~/results-2025-04-09.tar.gz results-2025-04-09.tar.gz

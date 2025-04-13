@@ -10,7 +10,7 @@ import seaborn as sns
 
 pd.set_option("display.max_rows", 500)
 
-root = "result"
+root = "results-2025-04-09/result"
 results = []
 
 for dataset in os.listdir(root):
@@ -113,6 +113,12 @@ results_df["OCC"] = np.where(
     ),
 )
 
+results_df["\\alpha"] = np.where(
+    results_df.Method.str.contains("FOR-CTL"),
+    results_df.Method.str.split("-").apply(lambda x: x[-1] if re.match('[0-9]+\.[0-9]+', x[-1]) else None),
+    'Normal OCC',
+)
+
 results_df["Dataset"] = results_df["Dataset"].str.replace("MachineAnimal", "VA")
 results_df["Dataset"] = results_df["Dataset"].str.replace("CarTruck", "CT")
 
@@ -158,273 +164,37 @@ import pandas as pd
 import seaborn as sns
 
 results_df = pd.read_csv("full_results.csv")
-
-results_df["Label shift \\pi"] = results_df["Label shift \\pi"].fillna("None")
-results_df = results_df[
-    (results_df["Dataset"] != "CDC-Diabetes")
-    & (~results_df["Dataset"].str.contains("SCAR"))
-]
-results_df = results_df[(results_df["c"] != 0.02)]
-results_df = results_df[results_df["OCC"] == "Bayes"]
-
-results_df["Direct \\pi~ estimation error"] = (
-    results_df["Immediate \\pi estimation"] - results_df["True label shift \\pi"]
-).abs()
-results_df["EM \\pi~ estimation error"] = (
-    results_df["EM \\pi estimation"] - results_df["True label shift \\pi"]
-).abs()
-
-pi_mse_df = pd.concat(
-    [
-        results_df.pivot_table(
-            values=metric,
-            index=["Dataset", "Label shift \\pi", "c"],
-            columns=["BaseMethod", "OCC", "Label shift method"],
-            aggfunc=lambda x: np.sqrt(np.mean(x**2)),
-        )
-        .set_axis(["Value"], axis=1)
-        .assign(Metric=metric)
-        for metric in ["Direct \\pi~ estimation error", "EM \\pi~ estimation error"]
-    ],
-    axis=0,
-)
-pi_mse_df = pi_mse_df.reset_index(drop=False)
-pi_errors = (
-    pi_mse_df.groupby(["Dataset", "Label shift \\pi", "c", "Metric"])
-    .Value.mean()
-    .reset_index(drop=False)
-)
-
-results_df = results_df[
-    np.isin(
-        results_df["Label shift method"],
-        ["Augmented label shift", "Cutoff label shift", "EM label shift"],
-    )
-]
-
-results_df["Label shift method"] = np.where(
-    results_df["Label shift method"] == "Augmented label shift",
-    "ALS",
-    results_df["Label shift method"],
-)
-results_df["Label shift method"] = np.where(
-    results_df["Label shift method"] == "Cutoff label shift",
-    "CLS",
-    results_df["Label shift method"],
-)
-results_df["Label shift method"] = np.where(
-    results_df["Label shift method"] == "EM label shift",
-    "CLS-EM",
-    results_df["Label shift method"],
-)
-
 results_df
 
-# %%
-sns.set_theme()
-
-palette = ["#000000", "#474747", "#909090"]
-
-for metric in ["U-Balanced accuracy", "U-Accuracy"]:
-    results_df["Label shift label"] = np.where(
-        results_df["Label shift \\pi"] == "None",
-        "No shift",
-        "$\\widetilde{\\pi}="
-        + results_df["Label shift \\pi"].astype(str).str.slice(0, 3)
-        + "$",
-    )
-
-    facet = sns.FacetGrid(
-        results_df, row="Label shift label", col="Dataset", height=2.2
-    )
-    facet.map_dataframe(
-        sns.lineplot,
-        x="c",
-        y=metric,
-        hue="Label shift method",
-        style="Label shift method",
-        markers=True,
-        errorbar="se",
-        palette=palette,
-        # err_style="bars",
-        # err_kws=dict(capsize=3, capthick=1),
-    )
-    facet.set_titles("{row_name}, {col_name}")
-    facet.add_legend()
-
-    sns.move_legend(
-        facet,
-        "lower center",
-        bbox_to_anchor=(0.5, -0.015),
-        ncol=3,
-        title=None,
-        frameon=False,
-    )
-
-    os.makedirs("plots", exist_ok=True)
-    plt.savefig(f"plots/{metric}.pdf", bbox_inches="tight")
-    plt.savefig(f"plots/{metric}.png", dpi=300, bbox_inches="tight")
-
-    plt.show()
+results_df = results_df[~(results_df.OCC == "None")]
 
 # %%
-sns.set_theme()
-
-pi_errors["$\\widetilde{\\pi}$"] = np.where(
-    pi_errors["Label shift \\pi"] == "None",
-    "No shift",
-    pi_errors["Label shift \\pi"].astype(str).str.slice(0, 3),
-)
-
-pi_errors = pi_errors[pi_errors["Label shift \\pi"] != "None"]
-
-pi_errors["Estimator"] = np.where(
-    pi_errors["Metric"].str.contains("EM"), "EM estimator", "Direct estimator"
-)
-pi_errors["Error"] = pi_errors["Value"]
-
-facet = sns.FacetGrid(pi_errors, col="Dataset", height=2.6, col_wrap=3)
-facet.map_dataframe(
-    sns.lineplot,
-    x="$\\widetilde{\\pi}$",
-    y="Error",
-    # hue="c",
-    hue="Estimator",
-    style="Estimator",
-    markers=True,
-    # estimator=np.median,
-    errorbar=None,
-    # palette='deep'
-    palette=["#000000", "#777777"],
-)
-facet.set_titles("{col_name}")
-facet.add_legend()
-
-sns.move_legend(
-    facet,
-    "lower center",
-    bbox_to_anchor=(0.69, 0.24),
-    ncol=1,
-    title=None,
-    frameon=False,
-)
-
-for ax in facet.axes.flat:
-    for label in ax.get_xticklabels():
-        label.set_rotation(45)
-
-os.makedirs("plots", exist_ok=True)
-plt.savefig("plots/pi-errors.pdf", bbox_inches="tight")
-plt.savefig("plots/pi-errors.png", dpi=300, bbox_inches="tight")
-
-plt.show()
-
-# %%
-pi_errors_per_c = (
-    pi_mse_df.groupby(["Label shift \\pi", "c", "Metric"])
-    .Value.agg(lambda x: np.sqrt(np.mean(x**2)))
-    .reset_index(drop=False)
-)
-
-pi_errors_per_c["Estimator"] = np.where(
-    pi_errors_per_c["Metric"].str.contains("EM"), "EM", "Direct"
-)
-pi_errors_per_c["$\\widetilde{\\pi}$"] = np.where(
-    pi_errors_per_c["Label shift \\pi"] == "None",
-    "No shift",
-    pi_errors_per_c["Label shift \\pi"].astype(str).str.slice(0, 3),
-)
-
-pi_errors_per_c_pivot = pi_errors_per_c.pivot(
-    values="Value", index=["$\\widetilde{\\pi}$"], columns=["c", "Estimator"]
-)
-pi_errors_per_c_pivot.loc["Mean error"] = pi_errors_per_c_pivot.mean()
-pi_errors_per_c_pivot.round(3).to_csv("pi_errors_per_c.csv")
-
-pi_errors_per_c_pivot
-
-# %%
-sns.set_theme()
-
-pi_errors["$\\widetilde{\\pi}$"] = np.where(
-    pi_errors["Label shift \\pi"] == "None",
-    "No shift",
-    pi_errors["Label shift \\pi"].astype(str).str.slice(0, 3),
-)
-
-pi_errors = pi_errors[pi_errors["Label shift \\pi"] != "None"]
-
-pi_errors["Estimator"] = np.where(
-    pi_errors["Metric"].str.contains("EM"), "EM estimator", "Direct estimator"
-)
-pi_errors["Error"] = pi_errors["Value"]
-
-facet = sns.FacetGrid(pi_errors, col="Dataset", height=2.6, col_wrap=3)
-facet.map_dataframe(
-    sns.lineplot,
-    x="$\\widetilde{\\pi}$",
-    y="Error",
-    hue="c",
-    # hue="Estimator",
-    style="Estimator",
-    markers=True,
-    palette="deep",
-    # palette=["#000000", "#777777"],
-)
-facet.set_titles("{col_name}")
-facet.add_legend()
-
-sns.move_legend(
-    facet,
-    "lower center",
-    bbox_to_anchor=(0.69, 0.04),
-    ncol=1,
-    title=None,
-    frameon=False,
-)
-
-for ax in facet.axes.flat:
-    for label in ax.get_xticklabels():
-        label.set_rotation(45)
-
-os.makedirs("plots", exist_ok=True)
-plt.savefig("plots/pi-errors-per-c.pdf", bbox_inches="tight")
-plt.savefig("plots/pi-errors-per-c.png", dpi=300, bbox_inches="tight")
-
-plt.show()
-
-# %%
-for metric in ["U-Balanced accuracy", "U-Accuracy"]:
-    results_df["Label shift label"] = np.where(
-        results_df["Label shift \\pi"] == "None",
-        "no shift",
-        "$\\widetilde{\\pi}="
-        + results_df["Label shift \\pi"].astype(str).str.slice(0, 3)
-        + "$",
+for metric in ["Accuracy", 'F1 score']:
+    pivot_df = results_df.pivot_table(
+        values=metric,
+        index=["Dataset", "c"],
+        columns=["OCC", '\\alpha'],
+        aggfunc=np.nanmean,
+        dropna=False
     )
 
-    # First, calculate the rank of U-Accuracy values within each subgroup defined by ["Dataset", "Label shift label", 'c', 'Experiment']
-    results_df[f"{metric} Rank"] = results_df.groupby(
-        ["Dataset", "Label shift label", "c", "Experiment"]
-    )[metric].rank(ascending=False)
-    # Then, compute the average rank for each combination of ["Dataset", "Label shift label", 'Label shift method']
-    average_rank_df = (
-        results_df.groupby(["Dataset", "Label shift method"])[f"{metric} Rank"]
-        .mean()
-        .reset_index()
-    )
-    # Pivot the DataFrame as specified, with 'Label shift method' as the index and ["Dataset", "Label shift label"] as columns
-    pivot_df = average_rank_df.pivot(
-        values=f"{metric} Rank", columns="Dataset", index="Label shift method"
-    )
+    pivot_df.round(3).to_csv(f"{metric}.csv")
+    pivot_df.round(3).to_latex(f"{metric}.tex")
+    display(pivot_df.round(3))
 
-    # Calculate the mean rank across all columns for each 'Label shift method' and add it as the last column
-    pivot_df["Mean Rank"] = pivot_df.mean(axis=1)
+# %%
+results_df['Actual to expected example ratio'] = results_df['Actual n_PU'] / results_df['Expected n_PU']
+pivot_df = results_df.loc[~(results_df["\\alpha"] == 'Normal OCC')].pivot_table(
+    values=['Actual to expected example ratio'],
+    index=["Dataset", "c"],
+    columns=["OCC", '\\alpha'],
+    aggfunc=np.nanmean,
+    dropna=False
+)
 
-    # Display the final DataFrame
-    display(pivot_df)
-
-    pivot_df.round(2).to_csv(f"ranks_{metric}.csv")
+pivot_df.round(3).to_csv(f"n_PU.csv")
+pivot_df.round(3).to_latex(f"n_PU.tex")
+display(pivot_df.round(3))
 
 # %%
 for metric in ["U-Balanced accuracy", "U-Accuracy"]:
