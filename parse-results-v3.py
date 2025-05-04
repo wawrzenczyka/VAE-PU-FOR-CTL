@@ -6,11 +6,12 @@ import re
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import scipy.stats
 import seaborn as sns
 
 pd.set_option("display.max_rows", 500)
 
-root = "results-2025-04-09/result"
+root = "results-2025-05-04/result"
 results = []
 
 for dataset in os.listdir(root):
@@ -166,215 +167,216 @@ import seaborn as sns
 results_df = pd.read_csv("full_results.csv")
 results_df
 
-results_df = results_df[~(results_df.OCC == "None")]
+# results_df = results_df[~(results_df.OCC == "None")]
+
+# Add normal VAE-PU results to IForest results
+results_df.loc[results_df['OCC'] == "None", "\\alpha"] = 'VAE-PU'
+# results_df[results_df.OCC == "None", "OCC"] = 'IForest'
 
 # %%
+filtered_df = results_df[results_df["OCC"] == 'IForest']
+
 for metric in ["Accuracy", 'F1 score']:
-    pivot_df = results_df.pivot_table(
+    # Create a pivot table with both mean and sem
+    mean_df = filtered_df.pivot_table(
         values=metric,
         index=["Dataset", "c"],
-        columns=["OCC", '\\alpha'],
+        # columns=["OCC", '\\alpha'],
+        columns=['\\alpha'],
         aggfunc=np.nanmean,
         dropna=False
     )
+    
+    # Calculate standard error of the mean (SEM)
+    sem_df = filtered_df.pivot_table(
+        values=metric,
+        index=["Dataset", "c"],
+        # columns=["OCC", '\\alpha'],
+        columns=['\\alpha'],
+        aggfunc=lambda x: scipy.stats.sem(x),
+        dropna=False
+    )
+    
+    # Format as "mean ± SEM" with exactly 3 decimal places
+    mean_formatted = mean_df.applymap(lambda x: f"{x:.3f}")
+    sem_formatted = sem_df.applymap(lambda x: f"{x:.3f}")
+    formatted_df = mean_formatted + " \pm " + sem_formatted
+    
+    # Save regular CSV output
+    formatted_df.to_csv(f"{metric}.csv")
+    
+    # Create a LaTeX version with bold formatting for best alpha value and italic for runner-up
+    max_mask = pd.DataFrame(False, index=mean_df.index, columns=mean_df.columns)
+    runner_up_mask = pd.DataFrame(False, index=mean_df.index, columns=mean_df.columns)
+    
+    # Find max and runner-up values for each row
+    for idx in mean_df.index:
+        row_values = mean_df.loc[idx].sort_values(ascending=False)
+        if len(row_values) >= 1:
+            # Mark highest value
+            max_col = row_values.index[0]
+            max_mask.at[idx, max_col] = True
+            
+            # Mark second highest value (runner-up)
+            if len(row_values) >= 2:
+                runner_up_col = row_values.index[1]
+                runner_up_mask.at[idx, runner_up_col] = True
+    
+    # Apply formatting for LaTeX
+    latex_df = formatted_df.copy()
+  
+    # First wrap ALL values in math mode
+    for idx in latex_df.index:
+        for col in latex_df.columns:
+            latex_df.at[idx, col] = f"${{{latex_df.at[idx, col]}}}$"
+    
+    # # Apply italic formatting for runner-up (do this second) - using mathit
+    # for idx, row in runner_up_mask.iterrows():
+    #     for col, is_runner_up in row.items():
+    #         if is_runner_up:
+    #             latex_df.at[idx, col] = f"$\\mathit{{{formatted_df.at[idx, col]}}}$"
+    
+    # Apply bold formatting for highest (do this last to override if there's a tie) - using mathbf
+    for idx, row in max_mask.iterrows():
+        for col, is_max in row.items():
+            if is_max:
+                latex_df.at[idx, col] = f"$\\mathbf{{{formatted_df.at[idx, col]}}}$"
+    
+    # Format column headers to use bold math
+    latex_header_map = {}
+    for col in latex_df.columns:
+        # Check if the column name contains math symbols, is a number, or is 'c'
+        if '\\' in str(col) or str(col).replace('.', '', 1).isdigit() or str(col) == 'c':
+            latex_header_map[col] = f"$\\bm{{{col}}}$"
+        else:
+            latex_header_map[col] = f"\\textbf{{{col}}}"
 
-    pivot_df.round(3).to_csv(f"{metric}.csv")
-    pivot_df.round(3).to_latex(f"{metric}.tex")
-    display(pivot_df.round(3))
+    # Apply the header mapping to rename the columns
+    latex_df = latex_df.rename(columns=latex_header_map)
+
+    # Format index names to use bold math/text
+    index_name_map = {}
+    for name in latex_df.index.names:
+        # Check if the column name contains math symbols, is a number, or is 'c'
+        if '\\' in str(name) or str(name).replace('.', '', 1).isdigit() or str(name) == 'c':
+            index_name_map[name] = f"$\\bm{{{name}}}$"
+        elif name:
+            index_name_map[name] = f"\\textbf{{{name}}}"
+
+    # Apply the index name mapping
+    latex_df.index.names = [index_name_map.get(name, name) for name in latex_df.index.names]
+    
+    # Format column names (MultiIndex level names) to use bold math/text
+    column_name_map = {}
+    for name in latex_df.columns.names:
+        # Check if the column name contains math symbols, is a number, or is 'c'
+        if '\\' in str(name) or str(name).replace('.', '', 1).isdigit() or str(name) == 'c':
+            column_name_map[name] = f"$\\bm{{{name}}}$"
+        elif name:
+            column_name_map[name] = f"\\textbf{{{name}}}"
+    
+    # Apply the column name mapping
+    latex_df.columns.names = [column_name_map.get(name, name) for name in latex_df.columns.names]
+
+    # Save the formatted LaTeX output with bold headers and index names
+    latex_output = latex_df.to_latex(
+        escape=False, 
+        multirow=True,
+        column_format='ll|llll|l'  # Specify the desired column format
+    )
+
+    # Add a note about requiring the bm package
+    latex_output = "% Requires \\usepackage{bm} in preamble\n" + latex_output
+
+    latex_output = latex_output.replace("\\cline{1-7}", "\\midrule")
+
+    # Write to file
+    with open(f"{metric}.tex", "w") as f:
+        f.write(latex_output)
+    
+    # Display the formatted results
+    display(latex_df)
 
 # %%
-results_df['Actual to expected example ratio'] = results_df['Actual n_PU'] / results_df['Expected n_PU']
-pivot_df = results_df.loc[~(results_df["\\alpha"] == 'Normal OCC')].pivot_table(
+# for metric in ["Accuracy", 'F1 score']:
+#     # Create a pivot table with both mean and sem
+#     mean_df = results_df.pivot_table(
+#         values=metric,
+#         index=["Dataset", "c"],
+#         columns=["OCC", '\\alpha'],
+#         aggfunc=np.nanmean,
+#         dropna=False
+#     )
+    
+#     # Calculate standard error of the mean (SEM)
+#     sem_df = results_df.pivot_table(
+#         values=metric,
+#         index=["Dataset", "c"],
+#         columns=["OCC", '\\alpha'],
+#         aggfunc=lambda x: np.nanstd(x, ddof=1) / np.sqrt(np.sum(~np.isnan(x))),
+#         dropna=False
+#     )
+    
+#     # Format as "mean ± SEM" with exactly 3 decimal places
+#     mean_formatted = mean_df.applymap(lambda x: f"{x:.3f}")
+#     sem_formatted = sem_df.applymap(lambda x: f"{x:.3f}")
+#     formatted_df = mean_formatted + " ± " + sem_formatted
+    
+#     # Save regular CSV output
+#     formatted_df.to_csv(f"{metric}.csv")
+    
+#     # Create a LaTeX version with bold formatting for best alpha value per OCC method
+#     max_mask = pd.DataFrame(False, index=mean_df.index, columns=mean_df.columns)
+    
+#     # Group by OCC and find max values across different alphas
+#     for occ in mean_df.columns.get_level_values('OCC').unique():
+#         occ_cols = [col for col in mean_df.columns if col[0] == occ]
+#         max_per_row = mean_df[occ_cols].max(axis=1)
+        
+#         for col in occ_cols:
+#             max_mask[col] = mean_df[col].eq(max_per_row)
+    
+#     # Apply bold formatting for LaTeX
+#     latex_df = formatted_df.copy()
+#     for idx, row in max_mask.iterrows():
+#         for col, is_max in row.items():
+#             if is_max:
+#                 latex_df.at[idx, col] = f"\\textbf{{{latex_df.at[idx, col]}}}"
+    
+#     # Save the formatted LaTeX output
+#     latex_df.to_latex(f"{metric}.tex", escape=False)
+    
+#     # Display the formatted results (without bold formatting for display)
+#     display(latex_df)
+
+# %%
+filtered_df['Actual to expected example ratio'] = filtered_df['Actual n_PU'] / results_df['Expected n_PU']
+pivot_df = filtered_df.loc[~(filtered_df["\\alpha"] == 'Normal OCC')].pivot_table(
     values=['Actual to expected example ratio'],
     index=["Dataset", "c"],
-    columns=["OCC", '\\alpha'],
+    # columns=["OCC", '\\alpha'],
+    columns=['\\alpha'],
     aggfunc=np.nanmean,
     dropna=False
 )
 
+# Save the formatted LaTeX output with bold headers and index names
+latex_output = pivot_df.round(3).to_latex(
+    escape=False, 
+    multirow=True,
+    column_format='ll|llll'  # Specify the desired column format
+)
+
+# Add a note about requiring the bm package
+latex_output = "% Requires \\usepackage{bm} in preamble\n" + latex_output
+
+latex_output = latex_output.replace("\\cline{1-6}", "\\midrule")
+
 pivot_df.round(3).to_csv(f"n_PU.csv")
-pivot_df.round(3).to_latex(f"n_PU.tex")
+# Write to file
+with open(f"n_PU.tex", "w") as f:
+    f.write(latex_output)
+
 display(pivot_df.round(3))
 
 # %%
-for metric in ["U-Balanced accuracy", "U-Accuracy"]:
-    results_df["Label shift label"] = np.where(
-        results_df["Label shift \\pi"] == "None",
-        "no shift",
-        "$\\widetilde{\\pi}="
-        + results_df["Label shift \\pi"].astype(str).str.slice(0, 3)
-        + "$",
-    )
-
-    # Calculate the maximum accuracy value for each group (["Dataset", "Label shift label", "c", "Experiment"])
-    max_accuracy_df = results_df.groupby(
-        ["Dataset", "Label shift label", "c", "Experiment"]
-    )[metric].transform("max")
-
-    # Calculate the accuracy difference (current accuracy - maximum accuracy in the group)
-    results_df[f"{metric} Accuracy Difference"] = max_accuracy_df - results_df[metric]
-
-    # Compute the mean of the accuracy differences for each combination of ["Dataset", "Label shift label", 'Label shift method']
-    mean_accuracy_diff_df = (
-        results_df.groupby(["Dataset", "Label shift method"])[
-            f"{metric} Accuracy Difference"
-        ]
-        .mean()
-        .reset_index()
-    )
-
-    # Pivot the DataFrame as specified, with 'Label shift method' as the index and ["Dataset", "Label shift label"] as columns
-    pivot_df = mean_accuracy_diff_df.pivot(
-        values=f"{metric} Accuracy Difference",
-        columns="Dataset",
-        index="Label shift method",
-    )
-
-    # Calculate the mean accuracy difference across all columns for each 'Label shift method' and add it as the last column
-    pivot_df["Mean Difference"] = pivot_df.mean(axis=1)
-
-    # Display the final DataFrame with the new column showing the mean accuracy difference
-    display(pivot_df)
-
-    # Save the results to CSV
-    pivot_df.round(3).to_csv(f"mean_accuracy_diff_{metric}.csv")
-
-# %%
-os.makedirs("label_shift_metrics", exist_ok=True)
-
-for metric in [
-    "Accuracy",
-    "Precision",
-    "Recall",
-    "F1 score",
-    "Balanced accuracy",
-    "U-Accuracy",
-    "U-Precision",
-    "U-Recall",
-    "U-F1 score",
-    "U-Balanced accuracy",
-]:
-    pivot = results_df.pivot_table(
-        values=metric,
-        index=["Dataset", "Label shift \\pi", "c"],
-        columns=["BaseMethod", "OCC", "Label shift method"],
-        dropna=False,
-    )
-    pivot
-    # results_df.pivot_table(values='Balanced accuracy', index=['c', "Dataset"], columns=["BaseMethod", "Balancing", "OCC"])
-    max_pivot = pivot.applymap(lambda a: f"{a * 100:.1f}") + np.where(
-        pivot.eq(pivot.max(axis=1), axis=0), "*", ""
-    )
-    max_pivot.to_csv(os.path.join("label_shift_metrics", f"{metric}.csv"))
-
-# %%
-os.makedirs("label_shift_metrics_condensed", exist_ok=True)
-
-condensed_results_df = results_df.loc[
-    np.isin(
-        results_df["Label shift method"],
-        ["Augmented label shift", "Cutoff label shift", "EM label shift"],
-    )
-]
-condensed_results_df["Label shift method"] = condensed_results_df[
-    "Label shift method"
-].str.replace(" label shift", "")
-
-for metric in [
-    "Accuracy",
-    "Precision",
-    "Recall",
-    "F1 score",
-    "Balanced accuracy",
-    "U-Accuracy",
-    "U-Precision",
-    "U-Recall",
-    "U-F1 score",
-    "U-Balanced accuracy",
-]:
-    pivot = condensed_results_df.pivot_table(
-        values=metric,
-        index=["Dataset", "Label shift \\pi", "c"],
-        columns=["OCC", "Label shift method"],
-    )
-    pivot
-    # results_df.pivot_table(values='Balanced accuracy', index=['c', "Dataset"], columns=["BaseMethod", "Balancing", "OCC"])
-    max_pivot = pivot.applymap(lambda a: f"{a * 100:.1f}") + np.where(
-        pivot.eq(pivot.max(axis=1), axis=0), "*", ""
-    )
-    max_pivot.to_csv(os.path.join("label_shift_metrics_condensed", f"{metric}.csv"))
-
-# %%
-direct_estimation_error = (
-    results_df["Immediate \\pi estimation"] - results_df["True label shift \\pi"]
-).abs()
-direct_estimation_error = direct_estimation_error.dropna()
-direct_error = np.sqrt((direct_estimation_error**2).mean())
-
-em_estimation_error = (
-    results_df["EM \\pi estimation"] - results_df["True label shift \\pi"]
-).abs()
-em_estimation_error = em_estimation_error.dropna()
-em_error = np.sqrt((em_estimation_error**2).mean())
-
-direct_error, em_error
-
-# %%
-os.makedirs("pi_metrics", exist_ok=True)
-
-results_df["Direct \\pi~ estimation error"] = (
-    results_df["Immediate \\pi estimation"] - results_df["True label shift \\pi"]
-).abs()
-results_df["EM \\pi~ estimation error"] = (
-    results_df["EM \\pi estimation"] - results_df["True label shift \\pi"]
-).abs()
-results_df["Direct 1 / \\pi~ estimation error"] = (
-    1 / results_df["Immediate \\pi estimation"]
-    - 1 / results_df["True label shift \\pi"]
-).abs()
-results_df["EM 1 / \\pi~ estimation error"] = (
-    1 / results_df["EM \\pi estimation"] - 1 / results_df["True label shift \\pi"]
-).abs()
-
-for metric in [
-    "Direct \\pi~ estimation error",
-    "EM \\pi~ estimation error",
-    "Direct 1 / \\pi~ estimation error",
-    "EM 1 / \\pi~ estimation error",
-]:
-    pivot = results_df.pivot_table(
-        values=metric,
-        index=["Dataset", "Label shift \\pi", "c"],
-        columns=["BaseMethod", "OCC", "Label shift method"],
-    )
-    # display(pivot)
-
-    metric_file = metric.replace("1 / \\pi", "pi inverse").replace("\\pi", "pi")
-    pivot.to_csv(os.path.join("pi_metrics", f"{metric_file}.csv"))
-
-# %%
-import altair as alt
-
-from save_chart import save_chart
-
-alt.data_transformers.enable("vegafusion")
-# alt.renderers.disable("jupyter")
-
-chart = (
-    alt.Chart(
-        results_df[["Label shift \\pi", "U-Balanced accuracy", "Dataset", "c"]][
-            :5000
-        ].rename(columns={"Label shift \\pi": "pi~"})
-    )
-    .mark_line()
-    .encode(
-        x=alt.X("pi~:N"),
-        y=alt.Y("U-Balanced accuracy"),
-        row=alt.Facet("Dataset"),
-        column=alt.Facet("c"),
-    )
-)
-chart
-
-# %%
-results_df.to_csv("test.csv")
